@@ -1,0 +1,22 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "Device is already configured."
+    },
+    "step": {
+      "user": {
+        "title": "Connect to IntesisHome",
+        "data": {
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "unknown": "Unexpected error.",
+      "no_devices": "No devices are linked to this account.",
+      "invalid_auth": "Invalid username or password.",
+      "cannot_connect": "Failed to connect."
+    }
+  }
+}
