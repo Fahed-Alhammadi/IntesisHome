@@ -1,0 +1,12 @@
+{
+  "domain": "intesishome",
+  "name": "IntesisHome",
+  "codeowners": ["@Fahed-Alhammadi"],
+  "config_flow": true,
+  "documentation": "https://github.com/Fahed-Alhammadi/IntesisHome",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/Fahed-Alhammadi/IntesisHome/issues",
+  "loggers": ["pyintesishome"],
+  "requirements": ["pyintesishome==2.0.1"],
+  "version": "1.0.0"
+}
