@@ -3,26 +3,11 @@ from __future__ import annotations
 
 import logging
 
-from pyintesishome import (
-    IHAuthenticationError,
-    IHConnectionError,
-    IntesisBase,
-    IntesisBox,
-    IntesisHome,
-    IntesisHomeLocal,
-)
-from pyintesishome.const import (
-    DEVICE_INTESISBOX,
-    DEVICE_INTESISHOME_LOCAL,
-)
+from pyintesishome import IHAuthenticationError, IHConnectionError, IntesisHome
+from pyintesishome.const import DEVICE_INTESISHOME
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import (
-    CONF_DEVICE,
-    CONF_HOST,
-    CONF_PASSWORD,
-    CONF_USERNAME,
-)
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -37,51 +22,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up IntesisHome from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    config = entry.data
-    ih_user = config.get(CONF_USERNAME)
-    ih_host = config.get(CONF_HOST)
-    ih_pass = config.get(CONF_PASSWORD)
-    device_type = config.get(CONF_DEVICE)
-    websession = async_get_clientsession(hass)
-
-    controller: IntesisBase
-    if device_type == DEVICE_INTESISBOX:
-        controller = IntesisBox(ih_host, loop=hass.loop)
-    elif device_type == DEVICE_INTESISHOME_LOCAL:
-        controller = IntesisHomeLocal(
-            ih_host, ih_user, ih_pass, loop=hass.loop, websession=websession
-        )
-    else:
-        controller = IntesisHome(
-            ih_user,
-            ih_pass,
-            hass.loop,
-            websession=websession,
-            device_type=device_type,
-        )
+    controller = IntesisHome(
+        entry.data[CONF_USERNAME],
+        entry.data[CONF_PASSWORD],
+        hass.loop,
+        websession=async_get_clientsession(hass),
+        device_type=DEVICE_INTESISHOME,
+    )
 
     try:
         await controller.connect()
     except IHAuthenticationError as exc:
-        _LOGGER.error("Invalid IntesisHome credentials for %s", device_type)
+        _LOGGER.error("Invalid IntesisHome credentials")
         raise ConfigEntryAuthFailed from exc
     except IHConnectionError as exc:
-        _LOGGER.error("Error connecting to the %s server: %s", device_type, exc)
+        _LOGGER.error("Error connecting to IntesisHome: %s", exc)
         raise ConfigEntryNotReady from exc
 
     if not controller.get_devices():
         await controller.stop()
-        _LOGGER.error(
-            "No devices returned from %s API: %s",
-            device_type,
-            controller.error_message,
-        )
+        _LOGGER.error("No devices returned from IntesisHome API")
         raise ConfigEntryNotReady("No devices returned from API")
 
-    hass.data[DOMAIN][entry.entry_id] = {
-        "config": entry.data,
-        "controller": controller,
-    }
+    hass.data[DOMAIN][entry.entry_id] = {"controller": controller}
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
