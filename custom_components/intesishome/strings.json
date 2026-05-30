@@ -1,0 +1,30 @@
+{
+  "config": {
+    "abort": {
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    },
+    "step": {
+      "user": {
+        "title": "Select the type of Intesis device to add",
+        "data": {
+          "device": "Device type"
+        }
+      },
+      "details": {
+        "title": "Connect to your IntesisHome account",
+        "data": {
+          "device": "Device type",
+          "host": "Hostname or IP address",
+          "username": "[%key:common::config_flow::data::username%]",
+          "password": "[%key:common::config_flow::data::password%]"
+        }
+      }
+    },
+    "error": {
+      "unknown": "[%key:common::config_flow::error::unknown%]",
+      "no_devices": "No devices are linked to this account.",
+      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
+      "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]"
+    }
+  }
+}
