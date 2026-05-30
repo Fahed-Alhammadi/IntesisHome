@@ -5,16 +5,8 @@
     },
     "step": {
       "user": {
-        "title": "Select the type of Intesis device to add",
+        "title": "Connect to IntesisHome",
         "data": {
-          "device": "Device type"
-        }
-      },
-      "details": {
-        "title": "Connect to your IntesisHome account",
-        "data": {
-          "device": "Device type",
-          "host": "Hostname or IP address",
           "username": "[%key:common::config_flow::data::username%]",
           "password": "[%key:common::config_flow::data::password%]"
         }
