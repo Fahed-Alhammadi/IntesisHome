@@ -1,8 +1,8 @@
 # IntesisHome for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-1.0.0-blue)
-![HA](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-green)
+![version](https://img.shields.io/badge/version-1.1.0-blue)
+![HA](https://img.shields.io/badge/Home%20Assistant-2024.12%2B-green)
 
 A native Home Assistant custom integration for **IntesisHome** cloud-connected AC controllers (airconwithme / anywAiR devices).
 
@@ -28,14 +28,16 @@ Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library 
 - **Fan speed control** — quiet, low, medium, high, auto (device-dependent).
 - **Vertical & horizontal swing** — full vane position control where supported.
 - **Preset modes** — eco, comfort, and powerful/boost where supported.
-- **Extra state attributes** — outdoor temperature, heating power consumption (kW), cooling power consumption (kW).
+- **Sensor entities** — outdoor temperature, heating power consumption (kW), and cooling power consumption (kW) are exposed as dedicated sensors (with device classes and long-term statistics) where the device reports them.
+- **Device registry** — each AC unit is registered as a device, so its climate and sensor entities group together and can be assigned to areas.
+- **Re-authentication** — if your password changes, Home Assistant prompts you to re-enter it without removing and re-adding the integration.
 - **Cloud push** — the integration maintains a persistent connection to the IntesisHome cloud and receives state updates in real time without polling.
 
 ---
 
 ## Requirements
 
-- Home Assistant **2024.1** or newer
+- Home Assistant **2024.12** or newer
 - An active [IntesisHome](https://www.intesishome.com) / airconwithme / anywAiR account
 - `pyintesishome==2.0.1` (installed automatically)
 
@@ -74,7 +76,8 @@ Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library 
 custom_components/intesishome/
 ├── __init__.py            # Integration setup and teardown
 ├── climate.py             # ClimateEntity with mode-based icons
-├── config_flow.py         # UI config flow (username + password)
+├── sensor.py              # Outdoor temp & power consumption sensors
+├── config_flow.py         # UI config flow + re-auth (username + password)
 ├── manifest.json          # Integration metadata
 ├── strings.json           # UI string keys
 └── translations/

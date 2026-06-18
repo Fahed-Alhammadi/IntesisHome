@@ -5,22 +5,23 @@ import logging
 
 from pyintesishome import IntesisBase
 
-from homeassistant import config_entries, core
-from homeassistant.components.climate import ClimateEntity
 from homeassistant.components.climate import (
     ATTR_HVAC_MODE,
     PRESET_BOOST,
     PRESET_COMFORT,
     PRESET_ECO,
     SWING_OFF,
+    ClimateEntity,
     ClimateEntityFeature,
     HVACMode,
 )
 from homeassistant.const import ATTR_TEMPERATURE, UnitOfTemperature
+from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import DOMAIN
+from . import DOMAIN, IntesisConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -87,12 +88,12 @@ def _swing_names_from_controller_list(ih_positions: list[str] | None) -> list[st
 
 
 async def async_setup_entry(
-    hass: core.HomeAssistant,
-    config_entry: config_entries.ConfigEntry,
+    hass: HomeAssistant,
+    config_entry: IntesisConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Create climate entities from config entry."""
-    controller: IntesisBase = hass.data[DOMAIN][config_entry.entry_id]["controller"]
+    controller = config_entry.runtime_data
     ih_devices = controller.get_devices() or {}
     async_add_entities(
         [
@@ -106,37 +107,48 @@ async def async_setup_entry(
 class IntesisAC(ClimateEntity):
     """Represents an IntesisHome air conditioning device."""
 
-    _enable_turn_on_off_backwards_compatibility = False
+    _attr_has_entity_name = True
+    _attr_name = None
+    _attr_should_poll = False
+    _attr_temperature_unit = UnitOfTemperature.CELSIUS
 
-    def __init__(self, ih_device_id, ih_device, controller) -> None:
+    def __init__(
+        self, ih_device_id: str, ih_device: dict, controller: IntesisBase
+    ) -> None:
         """Initialise the climate entity."""
-        self._controller: IntesisBase = controller
-        self._device_id: str = ih_device_id
-        self._ih_device: dict = ih_device
-        self._device_name: str = ih_device.get("name")
+        self._controller = controller
+        self._device_id = ih_device_id
+        self._ih_device = ih_device
+        self._device_name: str | None = ih_device.get("name")
         self._device_type: str = controller.device_type
-        self._connected: bool = False
+        self._connected: bool | None = None
         self._setpoint_step: float = 1.0
-        self._current_temp: float = None
-        self._max_temp: float = None
+        self._current_temp: float | None = None
+        self._max_temp: float | None = None
         self._attr_hvac_modes: list[HVACMode] = []
-        self._min_temp: int = None
-        self._target_temp: float = None
-        self._outdoor_temp: float = None
-        self._hvac_mode: HVACMode = None
-        self._preset: str = None
+        self._min_temp: float | None = None
+        self._target_temp: float | None = None
+        self._hvac_mode: HVACMode | None = None
+        self._preset: str | None = None
         self._preset_list: list[str] = [PRESET_ECO, PRESET_COMFORT, PRESET_BOOST]
-        self._run_hours: int = None
-        self._rssi = None
+        self._run_hours: int | None = None
+        self._rssi: int | None = None
         self._swing_list: list[str] = []
         self._swing_horizontal_list: list[str] = []
-        self._vvane: str = None
-        self._hvane: str = None
+        self._vvane: str | None = None
+        self._hvane: str | None = None
         self._power: bool = False
-        self._fan_speed = None
-        self._attr_supported_features = 0
-        self._power_consumption_heat = None
-        self._power_consumption_cool = None
+        self._fan_speed: str | None = None
+        self._fan_modes: list[str] | None = None
+        self._attr_supported_features = ClimateEntityFeature(0)
+
+        self._attr_unique_id = ih_device_id
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, ih_device_id)},
+            name=self._device_name,
+            manufacturer="Intesis",
+            model=self._device_type,
+        )
 
         # Turn on / off
         self._attr_supported_features |= ClimateEntityFeature.TURN_ON
@@ -212,7 +224,6 @@ class IntesisAC(ClimateEntity):
         self._rssi        = self._controller.get_rssi(self._device_id)
         self._run_hours   = self._controller.get_run_hours(self._device_id)
         self._target_temp = self._controller.get_setpoint(self._device_id)
-        self._outdoor_temp = self._controller.get_outdoor_temperature(self._device_id)
 
         mode = self._controller.get_mode(self._device_id)
         self._hvac_mode = MAP_IH_TO_HVAC_MODE.get(mode)
@@ -222,26 +233,6 @@ class IntesisAC(ClimateEntity):
 
         self._vvane = self._controller.get_vertical_swing(self._device_id)
         self._hvane = self._controller.get_horizontal_swing(self._device_id)
-
-        self._power_consumption_heat = self._controller.get_heat_power_consumption(
-            self._device_id
-        )
-        self._power_consumption_cool = self._controller.get_cool_power_consumption(
-            self._device_id
-        )
-
-        # Re-apply feature flags if they weren't set yet
-        if not self._attr_supported_features:
-            if self._fan_modes:
-                self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
-            if self._controller.has_setpoint_control(self._device_id):
-                self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
-            if self._swing_list:
-                self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
-            if self._swing_horizontal_list:
-                self._attr_supported_features |= ClimateEntityFeature.SWING_HORIZONTAL_MODE
-            if self._ih_device.get("climate_working_mode"):
-                self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
 
     # ─────────────────────────────────────────
     # COMMANDS
@@ -345,16 +336,6 @@ class IntesisAC(ClimateEntity):
     # ─────────────────────────────────────────
 
     @property
-    def name(self) -> str:
-        """Return device name."""
-        return self._device_name
-
-    @property
-    def unique_id(self) -> str:
-        """Return unique device ID."""
-        return self._device_id
-
-    @property
     def icon(self) -> str | None:
         """Return MDI icon matching the active HVAC mode.
 
@@ -365,11 +346,6 @@ class IntesisAC(ClimateEntity):
         return None
 
     @property
-    def temperature_unit(self) -> str:
-        """IntesisHome API always uses Celsius internally."""
-        return UnitOfTemperature.CELSIUS
-
-    @property
     def hvac_mode(self) -> HVACMode:
         """Return current HVAC mode; OFF when unit is powered down."""
         if self._power:
@@ -378,6 +354,7 @@ class IntesisAC(ClimateEntity):
 
     @property
     def current_temperature(self) -> float | None:
+        """Return the current measured temperature."""
         return self._current_temp
 
     @property
@@ -389,73 +366,64 @@ class IntesisAC(ClimateEntity):
 
     @property
     def target_temperature_step(self) -> float:
+        """Return the supported setpoint step."""
         return self._setpoint_step
 
     @property
     def min_temp(self) -> float | None:
+        """Return the minimum settable temperature."""
         return self._min_temp
 
     @property
     def max_temp(self) -> float | None:
+        """Return the maximum settable temperature."""
         return self._max_temp
 
     @property
     def fan_mode(self) -> str | None:
+        """Return the current fan speed."""
         return self._fan_speed
 
     @property
     def fan_modes(self) -> list[str] | None:
+        """Return the list of available fan speeds."""
         return self._fan_modes
 
     @property
     def swing_mode(self) -> str | None:
+        """Return the current vertical vane position."""
         if self._vvane is None:
             return None
         return MAP_IH_TO_SWING.get(self._vvane)
 
     @property
     def swing_modes(self) -> list[str]:
+        """Return the list of vertical vane positions."""
         return self._swing_list
 
     @property
     def swing_horizontal_mode(self) -> str | None:
+        """Return the current horizontal vane position."""
         if self._hvane is None:
             return None
         return MAP_IH_TO_SWING.get(self._hvane)
 
     @property
     def swing_horizontal_modes(self) -> list[str]:
+        """Return the list of horizontal vane positions."""
         return self._swing_horizontal_list
 
     @property
     def preset_mode(self) -> str | None:
+        """Return the current preset mode."""
         return self._preset
 
     @property
     def preset_modes(self) -> list[str]:
+        """Return the list of available preset modes."""
         return self._preset_list
 
     @property
-    def extra_state_attributes(self) -> dict:
-        """Expose outdoor temp and power consumption as extra attributes."""
-        attrs = {}
-        if self._outdoor_temp is not None:
-            attrs["outdoor_temp"] = self._outdoor_temp
-        if self._power_consumption_heat:
-            attrs["power_consumption_heat_kw"] = round(
-                self._power_consumption_heat / 1000, 1
-            )
-        if self._power_consumption_cool:
-            attrs["power_consumption_cool_kw"] = round(
-                self._power_consumption_cool / 1000, 1
-            )
-        return attrs
-
-    @property
     def available(self) -> bool:
-        """Mark unavailable only when connection has explicitly failed."""
+        """Mark unavailable only when the connection has explicitly failed."""
         return self._connected or self._connected is None
-
-    @property
-    def should_poll(self) -> bool:
-        return True

@@ -1,13 +1,21 @@
 {
   "config": {
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "reauth_successful": "[%key:common::config_flow::abort::reauth_successful%]"
     },
     "step": {
       "user": {
         "title": "Connect to IntesisHome",
         "data": {
           "username": "[%key:common::config_flow::data::username%]",
+          "password": "[%key:common::config_flow::data::password%]"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate IntesisHome",
+        "description": "The password for {username} is no longer valid. Enter the new password.",
+        "data": {
           "password": "[%key:common::config_flow::data::password%]"
         }
       }
@@ -17,6 +25,19 @@
       "no_devices": "No devices are linked to this account.",
       "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "outdoor_temp": {
+        "name": "Outdoor temperature"
+      },
+      "power_consumption_heat": {
+        "name": "Heating power consumption"
+      },
+      "power_consumption_cool": {
+        "name": "Cooling power consumption"
+      }
     }
   }
 }
