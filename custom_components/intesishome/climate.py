@@ -318,18 +318,24 @@ class IntesisAC(ClimateEntity):
         ih_preset = MAP_PRESET_MODE_TO_IH.get(preset_mode)
         ok = await self._controller.set_preset_mode(self._device_id, ih_preset)
         self._expect_ack(ok, f"preset {preset_mode!r}")
+        self._preset = preset_mode
+        self.async_write_ha_state()
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         """Set vertical vane position."""
         if ih_swing := MAP_SWING_TO_IH.get(swing_mode):
             ok = await self._controller.set_vertical_vane(self._device_id, ih_swing)
             self._expect_ack(ok, f"vertical vane {swing_mode!r}")
+            self._vvane = ih_swing
+            self.async_write_ha_state()
 
     async def async_set_swing_horizontal_mode(self, swing_mode: str) -> None:
         """Set horizontal vane position."""
         if ih_swing := MAP_SWING_TO_IH.get(swing_mode):
             ok = await self._controller.set_horizontal_vane(self._device_id, ih_swing)
             self._expect_ack(ok, f"horizontal vane {swing_mode!r}")
+            self._hvane = ih_swing
+            self.async_write_ha_state()
 
     # ─────────────────────────────────────────
     # PROPERTIES

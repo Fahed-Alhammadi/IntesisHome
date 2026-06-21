@@ -1,7 +1,7 @@
 # IntesisHome for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-1.1.0-blue)
+![version](https://img.shields.io/badge/version-1.1.1-blue)
 ![HA](https://img.shields.io/badge/Home%20Assistant-2024.12%2B-green)
 
 A native Home Assistant custom integration for **IntesisHome** cloud-connected AC controllers (airconwithme / anywAiR devices).
@@ -39,7 +39,7 @@ Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library 
 
 - Home Assistant **2024.12** or newer
 - An active [IntesisHome](https://www.intesishome.com) / airconwithme / anywAiR account
-- `pyintesishome==2.0.1` (installed automatically)
+- `pyintesishome==2.0.2` (installed automatically)
 
 ---
 
