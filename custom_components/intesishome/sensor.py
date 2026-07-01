@@ -135,7 +135,7 @@ class IntesisSensor(SensorEntity):
         """Deregister callback — do NOT stop the shared controller here."""
         self._controller.remove_update_callback(self.async_update_callback)
 
-    async def async_update_callback(self, device_id=None) -> None:
+    async def async_update_callback(self, device_id: str | None = None) -> None:
         """Push HA state update when the controller reports a change."""
         if not device_id or self._device_id == device_id:
             self.async_write_ha_state()
