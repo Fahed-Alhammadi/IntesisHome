@@ -201,7 +201,7 @@ class IntesisAC(ClimateEntity):
         """Deregister callback — do NOT stop the shared controller here."""
         self._controller.remove_update_callback(self.async_update_callback)
 
-    async def async_update_callback(self, device_id=None) -> None:
+    async def async_update_callback(self, device_id: str | None = None) -> None:
         """Push HA state update when the controller reports a change."""
         if self._controller and not self._controller.is_connected and self._connected:
             self._connected = False
@@ -245,24 +245,27 @@ class IntesisAC(ClimateEntity):
                 f"IntesisHome did not acknowledge {description}"
             )
 
+    async def _async_set_power(self, power_on: bool) -> None:
+        """Send a power command and update local state on acknowledgement."""
+        if power_on:
+            ok = await self._controller.set_power_on(self._device_id)
+            self._expect_ack(ok, "power on")
+        else:
+            ok = await self._controller.set_power_off(self._device_id)
+            self._expect_ack(ok, "power off")
+        self._power = power_on
+
     async def async_turn_on(self) -> None:
         """Turn device on."""
-        ok = await self._controller.set_power_on(self._device_id)
-        self._expect_ack(ok, "power on")
-        self._power = True
+        await self._async_set_power(True)
 
     async def async_turn_off(self) -> None:
         """Turn device off."""
-        ok = await self._controller.set_power_off(self._device_id)
-        self._expect_ack(ok, "power off")
-        self._power = False
+        await self._async_set_power(False)
 
     async def async_toggle(self) -> None:
         """Toggle power."""
-        if not self._controller.is_on(self._device_id):
-            await self.async_turn_on()
-        else:
-            await self.async_turn_off()
+        await self._async_set_power(not self._controller.is_on(self._device_id))
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set target temperature (and optionally switch mode at the same time)."""
@@ -282,17 +285,13 @@ class IntesisAC(ClimateEntity):
         _LOGGER.debug("Setting %s to %s", self._device_type, hvac_mode)
 
         if hvac_mode == HVACMode.OFF:
-            ok = await self._controller.set_power_off(self._device_id)
-            self._expect_ack(ok, "power off")
-            self._power = False
+            await self._async_set_power(False)
             self.async_write_ha_state()
             return
 
         # Power on first if needed
         if not self._controller.is_on(self._device_id):
-            ok = await self._controller.set_power_on(self._device_id)
-            self._expect_ack(ok, "power on")
-            self._power = True
+            await self._async_set_power(True)
 
         ok = await self._controller.set_mode(
             self._device_id, MAP_HVAC_MODE_TO_IH[hvac_mode]
@@ -301,7 +300,10 @@ class IntesisAC(ClimateEntity):
 
         # Re-send setpoint — mode changes can reset it on some devices
         if self._target_temp:
-            await self._controller.set_temperature(self._device_id, self._target_temp)
+            ok = await self._controller.set_temperature(
+                self._device_id, self._target_temp
+            )
+            self._expect_ack(ok, f"temperature {self._target_temp}")
 
         self._hvac_mode = hvac_mode
         self.async_write_ha_state()
@@ -332,7 +334,9 @@ class IntesisAC(ClimateEntity):
     async def async_set_swing_horizontal_mode(self, swing_mode: str) -> None:
         """Set horizontal vane position."""
         if ih_swing := MAP_SWING_TO_IH.get(swing_mode):
-            ok = await self._controller.set_horizontal_vane(self._device_id, ih_swing)
+            ok = await self._controller.set_horizontal_vane(
+                self._device_id, ih_swing
+            )
             self._expect_ack(ok, f"horizontal vane {swing_mode!r}")
             self._hvane = ih_swing
             self.async_write_ha_state()
@@ -353,8 +357,8 @@ class IntesisAC(ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode:
-        """Return current HVAC mode; OFF when unit is powered down."""
-        if self._power:
+        """Return current HVAC mode; OFF when powered down or mode unknown."""
+        if self._power and self._hvac_mode is not None:
             return self._hvac_mode
         return HVACMode.OFF
 
@@ -376,14 +380,18 @@ class IntesisAC(ClimateEntity):
         return self._setpoint_step
 
     @property
-    def min_temp(self) -> float | None:
-        """Return the minimum settable temperature."""
-        return self._min_temp
+    def min_temp(self) -> float:
+        """Return the minimum settable temperature (base default until known)."""
+        if self._min_temp is not None:
+            return self._min_temp
+        return super().min_temp
 
     @property
-    def max_temp(self) -> float | None:
-        """Return the maximum settable temperature."""
-        return self._max_temp
+    def max_temp(self) -> float:
+        """Return the maximum settable temperature (base default until known)."""
+        if self._max_temp is not None:
+            return self._max_temp
+        return super().max_temp
 
     @property
     def fan_mode(self) -> str | None:
