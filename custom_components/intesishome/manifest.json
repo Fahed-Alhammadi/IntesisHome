@@ -9,5 +9,5 @@
   "issue_tracker": "https://github.com/Fahed-Alhammadi/IntesisHome/issues",
   "loggers": ["pyintesishome"],
   "requirements": ["pyintesishome==2.0.2"],
-  "version": "1.1.2"
+  "version": "1.2.0"
 }
