@@ -12,12 +12,20 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfPower, UnitOfTemperature
+from homeassistant.const import (
+    SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+    EntityCategory,
+    UnitOfPower,
+    UnitOfTemperature,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from . import DOMAIN, IntesisConfigEntry
+
+# Push-based integration: no need to serialise entity updates.
+PARALLEL_UPDATES = 0
 
 
 def _to_kw(value: float | None) -> float | None:
@@ -25,6 +33,16 @@ def _to_kw(value: float | None) -> float | None:
     if value is None:
         return None
     return round(value / 1000, 1)
+
+
+def _to_number(value) -> float | None:
+    """Coerce API values that may arrive as strings into numbers."""
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -65,6 +83,18 @@ SENSOR_TYPES: tuple[IntesisSensorEntityDescription, ...] = (
         suggested_display_precision=1,
         value_fn=lambda controller, device_id: _to_kw(
             controller.get_cool_power_consumption(device_id)
+        ),
+    ),
+    IntesisSensorEntityDescription(
+        key="rssi",
+        translation_key="rssi",
+        device_class=SensorDeviceClass.SIGNAL_STRENGTH,
+        native_unit_of_measurement=SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+        value_fn=lambda controller, device_id: _to_number(
+            controller.get_rssi(device_id)
         ),
     ),
 )

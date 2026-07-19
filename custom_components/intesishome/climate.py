@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from pyintesishome import IntesisBase
 
@@ -24,6 +25,14 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from . import DOMAIN, IntesisConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
+
+# Push-based integration: no need to serialise entity updates.
+PARALLEL_UPDATES = 0
+
+# Lowest setpoint offered in HA regardless of what the cloud reports.
+# The IntesisHome API commonly enforces 18 °C even though the AC unit
+# itself accepts 16 °C; the cloud accepts the lower setpoint when sent.
+MIN_TEMP_LIMIT = 16.0
 
 # ─────────────────────────────────────────────
 # MODE MAPS
@@ -272,7 +281,7 @@ class IntesisAC(ClimateEntity):
         if hvac_mode := kwargs.get(ATTR_HVAC_MODE):
             await self.async_set_hvac_mode(hvac_mode)
 
-        if temperature := kwargs.get(ATTR_TEMPERATURE):
+        if (temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
             _LOGGER.debug("Setting %s to %s °C", self._device_type, temperature)
             ok = await self._controller.set_temperature(self._device_id, temperature)
             self._expect_ack(ok, f"temperature {temperature}")
@@ -317,7 +326,8 @@ class IntesisAC(ClimateEntity):
 
     async def async_set_preset_mode(self, preset_mode: str) -> None:
         """Set preset mode (eco / comfort / powerful)."""
-        ih_preset = MAP_PRESET_MODE_TO_IH.get(preset_mode)
+        if (ih_preset := MAP_PRESET_MODE_TO_IH.get(preset_mode)) is None:
+            raise HomeAssistantError(f"Unsupported preset mode {preset_mode!r}")
         ok = await self._controller.set_preset_mode(self._device_id, ih_preset)
         self._expect_ack(ok, f"preset {preset_mode!r}")
         self._preset = preset_mode
@@ -381,10 +391,14 @@ class IntesisAC(ClimateEntity):
 
     @property
     def min_temp(self) -> float:
-        """Return the minimum settable temperature (base default until known)."""
+        """Return the minimum settable temperature, never above MIN_TEMP_LIMIT.
+
+        Devices that report an even lower minimum keep it; the cap only
+        widens the range, it never narrows it.
+        """
         if self._min_temp is not None:
-            return self._min_temp
-        return super().min_temp
+            return min(self._min_temp, MIN_TEMP_LIMIT)
+        return MIN_TEMP_LIMIT
 
     @property
     def max_temp(self) -> float:
@@ -438,6 +452,16 @@ class IntesisAC(ClimateEntity):
         return self._preset_list
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose controller diagnostics for automations and debugging."""
+        attrs: dict[str, Any] = {}
+        if self._rssi is not None:
+            attrs["rssi"] = self._rssi
+        if self._run_hours is not None:
+            attrs["run_hours"] = self._run_hours
+        return attrs or None
+
+    @property
     def available(self) -> bool:
         """Mark unavailable only when the connection has explicitly failed."""
-        return self._connected or self._connected is None
+        return self._connected is not False
