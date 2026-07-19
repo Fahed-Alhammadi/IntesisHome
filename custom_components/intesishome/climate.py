@@ -30,9 +30,10 @@ _LOGGER = logging.getLogger(__name__)
 PARALLEL_UPDATES = 0
 
 # Lowest setpoint offered in HA regardless of what the cloud reports.
-# The IntesisHome API commonly enforces 18 °C even though the AC unit
-# itself accepts 16 °C; the cloud accepts the lower setpoint when sent.
-MIN_TEMP_LIMIT = 16.0
+# Also used as the fallback before the device reports its own minimum
+# (instead of HA's 7 °C default). Lower this (e.g. to 16.0) to allow
+# setpoints below what the IntesisHome cloud advertises.
+MIN_TEMP_LIMIT = 18.0
 
 # ─────────────────────────────────────────────
 # MODE MAPS
