@@ -135,7 +135,6 @@ class IntesisAC(ClimateEntity):
         self._setpoint_step: float = 1.0
         self._current_temp: float | None = None
         self._max_temp: float | None = None
-        self._attr_hvac_modes: list[HVACMode] = []
         self._min_temp: float | None = None
         self._target_temp: float | None = None
         self._hvac_mode: HVACMode | None = None
@@ -143,14 +142,10 @@ class IntesisAC(ClimateEntity):
         self._preset_list: list[str] = [PRESET_ECO, PRESET_COMFORT, PRESET_BOOST]
         self._run_hours: int | None = None
         self._rssi: int | None = None
-        self._swing_list: list[str] = []
-        self._swing_horizontal_list: list[str] = []
         self._vvane: str | None = None
         self._hvane: str | None = None
         self._power: bool = False
         self._fan_speed: str | None = None
-        self._fan_modes: list[str] | None = None
-        self._attr_supported_features = ClimateEntityFeature(0)
 
         self._attr_unique_id = ih_device_id
         self._attr_device_info = DeviceInfo(
@@ -160,13 +155,25 @@ class IntesisAC(ClimateEntity):
             model=self._device_type,
         )
 
-        # Turn on / off
-        self._attr_supported_features |= ClimateEntityFeature.TURN_ON
-        self._attr_supported_features |= ClimateEntityFeature.TURN_OFF
+        # Capability lists (modes/swing/fan/preset/target-temp) depend on
+        # device config data that streams in from the cloud *after*
+        # controller.connect() returns — connect() only waits for the
+        # login handshake, not the full initial status push. Compute them
+        # here for the entity's first state, then again on every
+        # async_update() so the entity self-heals once the real data
+        # arrives instead of being stuck showing only "off" forever.
+        self._refresh_capabilities()
+
+    def _refresh_capabilities(self) -> None:
+        """(Re)compute capability-derived attributes from live controller data."""
+        controller = self._controller
+        ih_device_id = self._device_id
+
+        features = ClimateEntityFeature.TURN_ON | ClimateEntityFeature.TURN_OFF
 
         # Temperature setpoint
         if controller.has_setpoint_control(ih_device_id):
-            self._attr_supported_features |= ClimateEntityFeature.TARGET_TEMPERATURE
+            features |= ClimateEntityFeature.TARGET_TEMPERATURE
 
         # Swing (vertical + horizontal)
         self._swing_list = _swing_names_from_controller_list(
@@ -176,27 +183,31 @@ class IntesisAC(ClimateEntity):
             controller.get_horizontal_swing_list(ih_device_id)
         )
         if self._swing_list:
-            self._attr_supported_features |= ClimateEntityFeature.SWING_MODE
+            features |= ClimateEntityFeature.SWING_MODE
         if self._swing_horizontal_list:
-            self._attr_supported_features |= ClimateEntityFeature.SWING_HORIZONTAL_MODE
+            features |= ClimateEntityFeature.SWING_HORIZONTAL_MODE
 
         # Fan speed
         self._fan_modes = controller.get_fan_speed_list(ih_device_id)
         if self._fan_modes:
-            self._attr_supported_features |= ClimateEntityFeature.FAN_MODE
+            features |= ClimateEntityFeature.FAN_MODE
 
         # Preset
-        if ih_device.get("climate_working_mode"):
-            self._attr_supported_features |= ClimateEntityFeature.PRESET_MODE
+        if self._ih_device.get("climate_working_mode"):
+            features |= ClimateEntityFeature.PRESET_MODE
+
+        self._attr_supported_features = features
 
         # HVAC modes — dynamically read from device, mapped to HA enums
+        hvac_modes: list[HVACMode] = []
         if modes := controller.get_mode_list(ih_device_id):
             for mode in modes:
                 if mode in MAP_IH_TO_HVAC_MODE:
-                    self._attr_hvac_modes.append(MAP_IH_TO_HVAC_MODE[mode])
+                    hvac_modes.append(MAP_IH_TO_HVAC_MODE[mode])
                 else:
                     _LOGGER.warning("Unexpected HVAC mode from device: %s", mode)
-        self._attr_hvac_modes.append(HVACMode.OFF)
+        hvac_modes.append(HVACMode.OFF)
+        self._attr_hvac_modes = hvac_modes
 
     # ─────────────────────────────────────────
     # HA LIFECYCLE
@@ -225,6 +236,7 @@ class IntesisAC(ClimateEntity):
 
     async def async_update(self) -> None:
         """Pull current state from the shared controller dictionary."""
+        self._refresh_capabilities()
         self._connected   = self._controller.is_connected
         self._current_temp = self._controller.get_temperature(self._device_id)
         self._fan_speed   = self._controller.get_fan_speed(self._device_id)
