@@ -8,6 +8,7 @@
       "user": {
         "title": "Connect to IntesisHome",
         "data": {
+          "device": "Cloud service",
           "username": "Username",
           "password": "Password"
         }
@@ -16,6 +17,7 @@
         "title": "Reauthenticate IntesisHome",
         "description": "The password for {username} is no longer valid. Enter the new password.",
         "data": {
+          "device": "Cloud service",
           "password": "Password"
         }
       }
