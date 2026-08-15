@@ -1,6 +1,7 @@
 """The IntesisHome integration."""
 from __future__ import annotations
 
+import asyncio
 from datetime import timedelta
 import logging
 
@@ -19,6 +20,12 @@ PLATFORMS = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR, Platform
 
 # How often to verify the cloud connection is still alive (see health check).
 HEALTH_CHECK_INTERVAL = timedelta(minutes=5)
+
+# Bounds a single connect() attempt. pyintesishome's own HTTP/socket calls
+# have no timeout of their own (aiohttp's ~5 min default applies at best), so
+# without this a stalled cloud endpoint can make every retry — at setup and
+# at each health check — ride out a long stall instead of failing fast.
+CONNECT_TIMEOUT = 30
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +47,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> b
     )
 
     try:
-        await controller.connect()
+        async with asyncio.timeout(CONNECT_TIMEOUT):
+            await controller.connect()
+    except TimeoutError as exc:
+        await controller.stop()
+        _LOGGER.error("Timed out connecting to %s", device_type)
+        raise ConfigEntryNotReady(f"Timed out connecting to {device_type}") from exc
     except IHAuthenticationError as exc:
         _LOGGER.error("Invalid credentials for %s", device_type)
         raise ConfigEntryAuthFailed from exc
@@ -68,7 +80,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> b
         if controller.is_connected:
             return
         try:
-            await controller.connect()
+            async with asyncio.timeout(CONNECT_TIMEOUT):
+                await controller.connect()
+        except TimeoutError:
+            _LOGGER.debug("IntesisHome still unreachable: timed out connecting")
         except IHAuthenticationError:
             _LOGGER.error(
                 "IntesisHome credentials are no longer valid; starting reauth"
