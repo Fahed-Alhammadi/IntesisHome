@@ -15,7 +15,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
 
 DOMAIN = "intesishome"
-PLATFORMS = [Platform.CLIMATE, Platform.SENSOR]
+PLATFORMS = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
 # How often to verify the cloud connection is still alive (see health check).
 HEALTH_CHECK_INTERVAL = timedelta(minutes=5)

@@ -17,6 +17,7 @@ from homeassistant.const import (
     EntityCategory,
     UnitOfPower,
     UnitOfTemperature,
+    UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -95,6 +96,33 @@ SENSOR_TYPES: tuple[IntesisSensorEntityDescription, ...] = (
         suggested_display_precision=0,
         value_fn=lambda controller, device_id: _to_number(
             controller.get_rssi(device_id)
+        ),
+    ),
+    IntesisSensorEntityDescription(
+        key="error_code",
+        translation_key="error_code",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        # A bare vendor error number means little on its own; the "problem"
+        # binary sensor is the user-facing signal, so keep this off by default.
+        entity_registry_enabled_default=False,
+        icon="mdi:alert-circle-outline",
+        # Reads the raw register rather than controller.get_error(): that
+        # helper's ERROR_MAP maps code 0 to a truthy "no abnormality" string,
+        # which would make this sensor never read as "no error" (0/None).
+        value_fn=lambda controller, device_id: _to_number(
+            controller.get_device_property(device_id, "error_code")
+        ),
+    ),
+    IntesisSensorEntityDescription(
+        key="filter_due_hours",
+        translation_key="filter_due_hours",
+        device_class=SensorDeviceClass.DURATION,
+        native_unit_of_measurement=UnitOfTime.HOURS,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        icon="mdi:filter-outline",
+        value_fn=lambda controller, device_id: _to_number(
+            controller.get_device_property(device_id, "filter_due_hours")
         ),
     ),
 )
