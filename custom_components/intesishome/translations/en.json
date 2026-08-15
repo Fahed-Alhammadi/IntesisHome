@@ -42,6 +42,28 @@
       },
       "rssi": {
         "name": "Wi-Fi signal strength"
+      },
+      "error_code": {
+        "name": "Error code"
+      },
+      "filter_due_hours": {
+        "name": "Filter due"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problem"
+      },
+      "filter_clean": {
+        "name": "Filter"
+      },
+      "connectivity": {
+        "name": "Connectivity"
+      }
+    },
+    "button": {
+      "reset_filter": {
+        "name": "Reset filter"
       }
     }
   }
