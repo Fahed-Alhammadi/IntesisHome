@@ -8,7 +8,7 @@ from pyintesishome import IHAuthenticationError, IHConnectionError, IntesisHome
 from pyintesishome.const import DEVICE_INTESISHOME
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.const import CONF_DEVICE, CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -27,26 +27,30 @@ type IntesisConfigEntry = ConfigEntry[IntesisHome]
 
 async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> bool:
     """Set up IntesisHome from a config entry."""
+    # Older entries were created before the service selector existed. Keep
+    # their historical IntesisHome behaviour until the user selects a
+    # different cloud service during reauth.
+    device_type = entry.data.get(CONF_DEVICE, DEVICE_INTESISHOME)
     controller = IntesisHome(
         entry.data[CONF_USERNAME],
         entry.data[CONF_PASSWORD],
         hass.loop,
         websession=async_get_clientsession(hass),
-        device_type=DEVICE_INTESISHOME,
+        device_type=device_type,
     )
 
     try:
         await controller.connect()
     except IHAuthenticationError as exc:
-        _LOGGER.error("Invalid IntesisHome credentials")
+        _LOGGER.error("Invalid credentials for %s", device_type)
         raise ConfigEntryAuthFailed from exc
     except IHConnectionError as exc:
-        _LOGGER.error("Error connecting to IntesisHome: %s", exc)
+        _LOGGER.error("Error connecting to %s: %s", device_type, exc)
         raise ConfigEntryNotReady from exc
 
     if not controller.get_devices():
         await controller.stop()
-        _LOGGER.error("No devices returned from IntesisHome API")
+        _LOGGER.error("No devices returned from %s API", device_type)
         raise ConfigEntryNotReady("No devices returned from API")
 
     entry.runtime_data = controller

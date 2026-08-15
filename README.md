@@ -1,7 +1,7 @@
 # IntesisHome for Home Assistant
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-![version](https://img.shields.io/badge/version-1.1.6-blue)
+![version](https://img.shields.io/badge/version-1.1.7-blue)
 ![HA](https://img.shields.io/badge/Home%20Assistant-2024.12%2B-green)
 
 A native Home Assistant custom integration for **IntesisHome** cloud-connected AC controllers (airconwithme / anywAiR devices).
@@ -12,7 +12,7 @@ Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library 
 
 ## Features
 
-- **UI config flow** — set up from Settings → Integrations with just your IntesisHome username and password. No YAML required.
+- **UI config flow** — select IntesisHome, airconwithme, or anywAiR, then sign in with your account. No YAML required.
 - **Mode-based icons** — the entity icon in HA changes to reflect the active HVAC mode:
 
   | Mode | Icon |
@@ -66,7 +66,7 @@ Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library 
 
 1. Go to **Settings → Devices & Services → Add Integration**
 2. Search for **IntesisHome**
-3. Enter your IntesisHome **username** and **password**
+3. Select the cloud service used by your account, then enter your **username** and **password**
 4. Each AC unit linked to your account will appear as a separate climate device
 
 ---
