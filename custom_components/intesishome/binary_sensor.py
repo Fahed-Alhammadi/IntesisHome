@@ -66,7 +66,7 @@ BINARY_SENSOR_TYPES: tuple[IntesisBinarySensorEntityDescription, ...] = (
         # A connectivity sensor that goes unavailable exactly when the
         # connection drops reports nothing at the moment it matters most.
         always_available=True,
-        value_fn=lambda controller, device_id: controller.is_connected,
+        value_fn=lambda controller, device_id: controller.is_available,
     ),
 )
 
@@ -139,7 +139,7 @@ class IntesisBinarySensor(BinarySensorEntity):
         """Return True while the controller has a live connection."""
         if self.entity_description.always_available:
             return True
-        return self._controller.is_connected
+        return self._controller.is_available
 
     async def async_added_to_hass(self) -> None:
         """Register update callback once entity is live."""
