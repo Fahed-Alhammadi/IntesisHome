@@ -18,7 +18,7 @@ from homeassistant.helpers.event import async_track_time_interval
 DOMAIN = "intesishome"
 PLATFORMS = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
-# How often to verify the cloud connection is still alive (see health check).
+# How often to check for a permanently-rejected credential (see health check).
 HEALTH_CHECK_INTERVAL = timedelta(minutes=5)
 
 # Bounds a single connect() attempt. pyintesishome's own HTTP/socket calls
@@ -68,29 +68,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> b
     entry.runtime_data = controller
 
     async def _async_health_check(_now) -> None:
-        """Recover a dead cloud connection.
+        """Start reauth once the cloud stops accepting these credentials.
 
-        pyintesishome retries dropped connections itself with backoff, but it
-        stops retrying permanently after an authentication error from the
-        cloud. Calling connect() here is a no-op while its own reconnect is
-        in progress; once it has given up, this either revives the
-        connection or surfaces the auth failure so the reauth flow can
-        prompt for a new password instead of leaving entities unavailable.
+        pyintesishome's background poller (added in 2.5.0, replacing the
+        old push-socket auto-reconnect loop) retries connection errors
+        forever on its own, but permanently retires itself once the cloud
+        rejects the credentials. That is the one failure a retry can't
+        fix, so this is what should trigger the reauth flow instead of
+        leaving entities unavailable indefinitely.
         """
-        if controller.is_connected:
-            return
-        try:
-            async with asyncio.timeout(CONNECT_TIMEOUT):
-                await controller.connect()
-        except TimeoutError:
-            _LOGGER.debug("IntesisHome still unreachable: timed out connecting")
-        except IHAuthenticationError:
+        if controller.authentication_failed:
             _LOGGER.error(
                 "IntesisHome credentials are no longer valid; starting reauth"
             )
             entry.async_start_reauth(hass)
-        except IHConnectionError as exc:
-            _LOGGER.debug("IntesisHome still unreachable: %s", exc)
 
     entry.async_on_unload(
         async_track_time_interval(hass, _async_health_check, HEALTH_CHECK_INTERVAL)

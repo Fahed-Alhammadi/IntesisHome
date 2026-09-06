@@ -131,7 +131,7 @@ class IntesisAC(ClimateEntity):
         self._ih_device = ih_device
         self._device_name: str | None = ih_device.get("name")
         self._device_type: str = controller.device_type
-        self._connected: bool | None = None
+        self._available: bool | None = None
         self._setpoint_step: float = 1.0
         self._current_temp: float | None = None
         self._max_temp: float | None = None
@@ -224,11 +224,11 @@ class IntesisAC(ClimateEntity):
 
     async def async_update_callback(self, device_id: str | None = None) -> None:
         """Push HA state update when the controller reports a change."""
-        if self._controller and not self._controller.is_connected and self._connected:
-            self._connected = False
+        if self._controller and not self._controller.is_available and self._available:
+            self._available = False
             _LOGGER.info("Connection to %s API was lost", self._device_type)
-        elif self._controller and self._controller.is_connected and not self._connected:
-            self._connected = True
+        elif self._controller and self._controller.is_available and not self._available:
+            self._available = True
             _LOGGER.debug("Connection to %s API was restored", self._device_type)
 
         if not device_id or self._device_id == device_id:
@@ -237,7 +237,7 @@ class IntesisAC(ClimateEntity):
     async def async_update(self) -> None:
         """Pull current state from the shared controller dictionary."""
         self._refresh_capabilities()
-        self._connected   = self._controller.is_connected
+        self._available    = self._controller.is_available
         self._current_temp = self._controller.get_temperature(self._device_id)
         self._fan_speed   = self._controller.get_fan_speed(self._device_id)
         self._power       = self._controller.is_on(self._device_id)
@@ -476,5 +476,13 @@ class IntesisAC(ClimateEntity):
 
     @property
     def available(self) -> bool:
-        """Mark unavailable only when the connection has explicitly failed."""
-        return self._connected is not False
+        """Mark unavailable only when the connection has explicitly failed.
+
+        Backed by the controller's is_available, not is_connected: since
+        pyintesishome 2.5.0 the command socket only opens on demand to send
+        a SET, so is_connected is normally False even when state is
+        flowing fine over the background HTTP poller. is_available folds
+        in poll freshness and permanent auth failure, which is what
+        "available" actually means here.
+        """
+        return self._available is not False

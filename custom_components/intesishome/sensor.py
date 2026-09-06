@@ -183,7 +183,7 @@ class IntesisSensor(SensorEntity):
     @property
     def available(self) -> bool:
         """Return True while the controller has a live connection."""
-        return self._controller.is_connected
+        return self._controller.is_available
 
     async def async_added_to_hass(self) -> None:
         """Register update callback once entity is live."""
