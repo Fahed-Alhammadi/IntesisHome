@@ -20,10 +20,10 @@ from homeassistant.const import (
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import DOMAIN, IntesisConfigEntry
+from . import IntesisConfigEntry
+from .entity import IntesisEntity
 
 # Push-based integration: no need to serialise entity updates.
 PARALLEL_UPDATES = 0
@@ -149,11 +149,9 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class IntesisSensor(SensorEntity):
+class IntesisSensor(IntesisEntity, SensorEntity):
     """Representation of an IntesisHome diagnostic/measurement sensor."""
 
-    _attr_has_entity_name = True
-    _attr_should_poll = False
     entity_description: IntesisSensorEntityDescription
 
     def __init__(
@@ -164,36 +162,11 @@ class IntesisSensor(SensorEntity):
         description: IntesisSensorEntityDescription,
     ) -> None:
         """Initialise the sensor."""
-        self._controller = controller
-        self._device_id = device_id
+        super().__init__(controller, device_id, device)
         self.entity_description = description
         self._attr_unique_id = f"{device_id}_{description.key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, device_id)},
-            name=device.get("name"),
-            manufacturer="Intesis",
-            model=controller.device_type,
-        )
 
     @property
     def native_value(self) -> float | None:
         """Return the current sensor value."""
         return self.entity_description.value_fn(self._controller, self._device_id)
-
-    @property
-    def available(self) -> bool:
-        """Return True while the controller has a live connection."""
-        return self._controller.is_available
-
-    async def async_added_to_hass(self) -> None:
-        """Register update callback once entity is live."""
-        self._controller.add_update_callback(self.async_update_callback)
-
-    async def async_will_remove_from_hass(self) -> None:
-        """Deregister callback — do NOT stop the shared controller here."""
-        self._controller.remove_update_callback(self.async_update_callback)
-
-    async def async_update_callback(self, device_id: str | None = None) -> None:
-        """Push HA state update when the controller reports a change."""
-        if not device_id or self._device_id == device_id:
-            self.async_write_ha_state()

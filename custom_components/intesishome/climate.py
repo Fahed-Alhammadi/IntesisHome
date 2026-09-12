@@ -66,8 +66,8 @@ _VANE_POSITIONS = {
     "Swing": "swing",
     **{f"Position{n}": f"manual{n}" for n in range(1, 10)},
 }
+# Vertical and horizontal vanes use the same position vocabulary.
 MAP_SWING_TO_IH = _VANE_POSITIONS
-MAP_HORIZONTAL_SWING_TO_IH = _VANE_POSITIONS
 MAP_IH_TO_SWING = {v: k for k, v in _VANE_POSITIONS.items()}
 
 # ─────────────────────────────────────────────
@@ -155,13 +155,12 @@ class IntesisAC(ClimateEntity):
             model=self._device_type,
         )
 
-        # Capability lists (modes/swing/fan/preset/target-temp) depend on
-        # device config data that streams in from the cloud *after*
-        # controller.connect() returns — connect() only waits for the
-        # login handshake, not the full initial status push. Compute them
-        # here for the entity's first state, then again on every
-        # async_update() so the entity self-heals once the real data
-        # arrives instead of being stuck showing only "off" forever.
+        # Capability lists (modes/swing/fan/preset/target-temp) come from
+        # UIDs (config_mode_map etc.) a device may report on its own
+        # schedule rather than in every poll. Compute them here for the
+        # entity's first state, then again on every async_update() so the
+        # entity self-heals if a capability arrives late or changes at
+        # runtime, instead of being stuck showing only "off" forever.
         self._refresh_capabilities()
 
     def _refresh_capabilities(self) -> None:
@@ -348,21 +347,21 @@ class IntesisAC(ClimateEntity):
 
     async def async_set_swing_mode(self, swing_mode: str) -> None:
         """Set vertical vane position."""
-        if ih_swing := MAP_SWING_TO_IH.get(swing_mode):
-            ok = await self._controller.set_vertical_vane(self._device_id, ih_swing)
-            self._expect_ack(ok, f"vertical vane {swing_mode!r}")
-            self._vvane = ih_swing
-            self.async_write_ha_state()
+        if (ih_swing := MAP_SWING_TO_IH.get(swing_mode)) is None:
+            raise HomeAssistantError(f"Unsupported swing mode {swing_mode!r}")
+        ok = await self._controller.set_vertical_vane(self._device_id, ih_swing)
+        self._expect_ack(ok, f"vertical vane {swing_mode!r}")
+        self._vvane = ih_swing
+        self.async_write_ha_state()
 
     async def async_set_swing_horizontal_mode(self, swing_mode: str) -> None:
         """Set horizontal vane position."""
-        if ih_swing := MAP_SWING_TO_IH.get(swing_mode):
-            ok = await self._controller.set_horizontal_vane(
-                self._device_id, ih_swing
-            )
-            self._expect_ack(ok, f"horizontal vane {swing_mode!r}")
-            self._hvane = ih_swing
-            self.async_write_ha_state()
+        if (ih_swing := MAP_SWING_TO_IH.get(swing_mode)) is None:
+            raise HomeAssistantError(f"Unsupported horizontal swing mode {swing_mode!r}")
+        ok = await self._controller.set_horizontal_vane(self._device_id, ih_swing)
+        self._expect_ack(ok, f"horizontal vane {swing_mode!r}")
+        self._hvane = ih_swing
+        self.async_write_ha_state()
 
     # ─────────────────────────────────────────
     # PROPERTIES
