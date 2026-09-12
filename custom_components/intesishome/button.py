@@ -86,6 +86,11 @@ class IntesisButton(IntesisEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Reset the filter-clean flag after the filter has been cleaned."""
-        ok = await self.entity_description.press_fn(self._controller, self._device_id)
+        # Serialised against every climate command on this account — see
+        # command_lock's definition in __init__.py for why.
+        async with self._controller.command_lock:
+            ok = await self.entity_description.press_fn(
+                self._controller, self._device_id
+            )
         if not ok:
             raise HomeAssistantError("IntesisHome did not acknowledge filter reset")
