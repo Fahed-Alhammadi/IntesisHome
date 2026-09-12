@@ -1,6 +1,7 @@
 """Support for IntesisHome Smart AC Controllers."""
 from __future__ import annotations
 
+from collections.abc import Awaitable
 import logging
 from typing import Any
 
@@ -266,13 +267,28 @@ class IntesisAC(ClimateEntity):
                 f"IntesisHome did not acknowledge {description}"
             )
 
+    async def _send_command(self, command: Awaitable[bool]) -> bool:
+        """Run one controller command with commands serialised.
+
+        The shared controller opens a single command socket per account,
+        used by every device under this entry, and pyintesishome guards
+        concurrent opens with a plain bool rather than a lock (see
+        `command_lock`'s definition in __init__.py) — issuing two commands
+        back to back (e.g. two quick taps on a +/- stepper) can race and
+        make the second one fail even though the first succeeds. Routing
+        every command through this lock avoids that instead of relying on
+        pyintesishome to serialise its own socket state.
+        """
+        async with self._controller.command_lock:
+            return await command
+
     async def _async_set_power(self, power_on: bool) -> None:
         """Send a power command and update local state on acknowledgement."""
         if power_on:
-            ok = await self._controller.set_power_on(self._device_id)
+            ok = await self._send_command(self._controller.set_power_on(self._device_id))
             self._expect_ack(ok, "power on")
         else:
-            ok = await self._controller.set_power_off(self._device_id)
+            ok = await self._send_command(self._controller.set_power_off(self._device_id))
             self._expect_ack(ok, "power off")
         self._power = power_on
 
@@ -295,7 +311,9 @@ class IntesisAC(ClimateEntity):
 
         if (temperature := kwargs.get(ATTR_TEMPERATURE)) is not None:
             _LOGGER.debug("Setting %s to %s °C", self._device_type, temperature)
-            ok = await self._controller.set_temperature(self._device_id, temperature)
+            ok = await self._send_command(
+                self._controller.set_temperature(self._device_id, temperature)
+            )
             self._expect_ack(ok, f"temperature {temperature}")
             self._target_temp = temperature
 
@@ -314,15 +332,15 @@ class IntesisAC(ClimateEntity):
         if not self._controller.is_on(self._device_id):
             await self._async_set_power(True)
 
-        ok = await self._controller.set_mode(
-            self._device_id, MAP_HVAC_MODE_TO_IH[hvac_mode]
+        ok = await self._send_command(
+            self._controller.set_mode(self._device_id, MAP_HVAC_MODE_TO_IH[hvac_mode])
         )
         self._expect_ack(ok, f"HVAC mode {hvac_mode}")
 
         # Re-send setpoint — mode changes can reset it on some devices
         if self._target_temp:
-            ok = await self._controller.set_temperature(
-                self._device_id, self._target_temp
+            ok = await self._send_command(
+                self._controller.set_temperature(self._device_id, self._target_temp)
             )
             self._expect_ack(ok, f"temperature {self._target_temp}")
 
@@ -331,7 +349,9 @@ class IntesisAC(ClimateEntity):
 
     async def async_set_fan_mode(self, fan_mode: str) -> None:
         """Set fan speed."""
-        ok = await self._controller.set_fan_speed(self._device_id, fan_mode)
+        ok = await self._send_command(
+            self._controller.set_fan_speed(self._device_id, fan_mode)
+        )
         self._expect_ack(ok, f"fan mode {fan_mode!r}")
         self._fan_speed = fan_mode
         self.async_write_ha_state()
@@ -340,7 +360,9 @@ class IntesisAC(ClimateEntity):
         """Set preset mode (eco / comfort / powerful)."""
         if (ih_preset := MAP_PRESET_MODE_TO_IH.get(preset_mode)) is None:
             raise HomeAssistantError(f"Unsupported preset mode {preset_mode!r}")
-        ok = await self._controller.set_preset_mode(self._device_id, ih_preset)
+        ok = await self._send_command(
+            self._controller.set_preset_mode(self._device_id, ih_preset)
+        )
         self._expect_ack(ok, f"preset {preset_mode!r}")
         self._preset = preset_mode
         self.async_write_ha_state()
@@ -349,7 +371,9 @@ class IntesisAC(ClimateEntity):
         """Set vertical vane position."""
         if (ih_swing := MAP_SWING_TO_IH.get(swing_mode)) is None:
             raise HomeAssistantError(f"Unsupported swing mode {swing_mode!r}")
-        ok = await self._controller.set_vertical_vane(self._device_id, ih_swing)
+        ok = await self._send_command(
+            self._controller.set_vertical_vane(self._device_id, ih_swing)
+        )
         self._expect_ack(ok, f"vertical vane {swing_mode!r}")
         self._vvane = ih_swing
         self.async_write_ha_state()
@@ -358,7 +382,9 @@ class IntesisAC(ClimateEntity):
         """Set horizontal vane position."""
         if (ih_swing := MAP_SWING_TO_IH.get(swing_mode)) is None:
             raise HomeAssistantError(f"Unsupported horizontal swing mode {swing_mode!r}")
-        ok = await self._controller.set_horizontal_vane(self._device_id, ih_swing)
+        ok = await self._send_command(
+            self._controller.set_horizontal_vane(self._device_id, ih_swing)
+        )
         self._expect_ack(ok, f"horizontal vane {swing_mode!r}")
         self._hvane = ih_swing
         self.async_write_ha_state()

@@ -45,6 +45,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> b
         websession=async_get_clientsession(hass),
         device_type=device_type,
     )
+    # pyintesishome opens one command socket per controller, shared by every
+    # device/entity under this entry, and guards concurrent opens with a
+    # plain bool (_connecting) rather than a lock — a second SET issued
+    # while the first is still opening the socket (e.g. two quick taps on a
+    # climate +/- stepper) skips the socket path entirely and falls back to
+    # the (slower, separately fallible) web portal. Serialising every
+    # command through this lock (see climate.py/button.py) avoids that race
+    # instead of working around pyintesishome's internals.
+    controller.command_lock = asyncio.Lock()
 
     try:
         async with asyncio.timeout(CONNECT_TIMEOUT):
