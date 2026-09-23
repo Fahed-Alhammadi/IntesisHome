@@ -86,8 +86,8 @@ class IntesisButton(IntesisEntity, ButtonEntity):
 
     async def async_press(self) -> None:
         """Reset the filter-clean flag after the filter has been cleaned."""
-        # Serialised against every climate command on this account, with a
-        # stale-socket retry — see async_send_command in __init__.py.
+        # Serialised against every climate command on this account — see
+        # command_lock's definition in __init__.py for why.
         ok = await async_send_command(
             self._controller,
             lambda: self.entity_description.press_fn(self._controller, self._device_id),

@@ -7,7 +7,7 @@ from datetime import timedelta
 import logging
 
 from pyintesishome import IHAuthenticationError, IHConnectionError, IntesisHome
-from pyintesishome.const import DEVICE_INTESISHOME
+from pyintesishome.const import DEVICE_INTESISHOME, PORTAL_URL
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_DEVICE, CONF_PASSWORD, CONF_USERNAME, Platform
@@ -32,38 +32,38 @@ _LOGGER = logging.getLogger(__name__)
 
 type IntesisConfigEntry = ConfigEntry[IntesisHome]
 
-# How long to wait for pyintesishome's receive task to unwind after we close
-# a stale command socket, before retrying a command on a fresh one.
-STALE_SOCKET_CLOSE_TIMEOUT = 2
-
 
 async def async_send_command(
     controller: IntesisHome, send: Callable[[], Awaitable[bool]]
 ) -> bool:
-    """Run one controller SET under command_lock, retrying once on a stale socket.
-
-    pyintesishome treats its command socket as usable for as long as
-    `is_connected` is True, and a missed set_ack does not close it. A
-    half-open TCP connection (NAT/router idle drop, cloud-side reset that
-    never reached us) still accepts writes, so every SET goes out into the
-    void, times out after 5s, and the socket stays "connected" — every
-    command keeps failing until the 120s keepalive (which can also write
-    into the void) happens to notice. If a SET fails while the socket
-    claims to be up, close it so the retry makes `_ensure_socket()` open a
-    fresh one (or fall back to the web portal). All SETs are absolute
-    values, so a retry is harmless even if the first one did land.
-    """
+    """Run one controller SET under command_lock (see async_setup_entry)."""
     async with controller.command_lock:
-        if await send():
-            return True
-        if not controller.is_connected:
-            return False
-        _LOGGER.debug("Command not acknowledged on open socket; reopening and retrying")
-        receive_task = controller._receive_task
-        controller._close_writer()
-        if receive_task is not None:
-            await asyncio.wait({receive_task}, timeout=STALE_SOCKET_CLOSE_TIMEOUT)
         return await send()
+
+
+class _IntesisHome(IntesisHome):
+    """IntesisHome with a web-portal fallback for unacknowledged socket SETs.
+
+    pyintesishome only falls back to the brand's web portal when the command
+    socket cannot be *opened*. Since IntesisHome's September 2026 server
+    change the socket opens and authenticates fine, but SETs sent over it
+    are never acknowledged (the socket is dropped instead) — every command
+    fails after the 5s ack timeout while the portal still works. So if a SET
+    went out over the socket and wasn't acknowledged, resend it through the
+    portal. SETs are absolute values, so a duplicate is harmless if the
+    socket one did land.
+    """
+
+    async def _set_value(self, device_id, uid, value) -> bool:
+        seq_before = self._set_seq_counter
+        if await super()._set_value(device_id, uid, value):
+            return True
+        # An unchanged seqNo means the socket path never ran and the library
+        # already tried (and failed) the portal itself — don't repeat it.
+        if self._set_seq_counter == seq_before or self._device_type not in PORTAL_URL:
+            return False
+        _LOGGER.debug("SET uid=%s not acknowledged on socket; trying web portal", uid)
+        return await self._portal_set_value(device_id, uid, value)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> bool:
@@ -72,7 +72,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> b
     # their historical IntesisHome behaviour until the user selects a
     # different cloud service during reauth.
     device_type = entry.data.get(CONF_DEVICE, DEVICE_INTESISHOME)
-    controller = IntesisHome(
+    controller = _IntesisHome(
         entry.data[CONF_USERNAME],
         entry.data[CONF_PASSWORD],
         hass.loop,
