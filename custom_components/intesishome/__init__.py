@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 import logging
 
@@ -31,6 +32,39 @@ _LOGGER = logging.getLogger(__name__)
 
 type IntesisConfigEntry = ConfigEntry[IntesisHome]
 
+# How long to wait for pyintesishome's receive task to unwind after we close
+# a stale command socket, before retrying a command on a fresh one.
+STALE_SOCKET_CLOSE_TIMEOUT = 2
+
+
+async def async_send_command(
+    controller: IntesisHome, send: Callable[[], Awaitable[bool]]
+) -> bool:
+    """Run one controller SET under command_lock, retrying once on a stale socket.
+
+    pyintesishome treats its command socket as usable for as long as
+    `is_connected` is True, and a missed set_ack does not close it. A
+    half-open TCP connection (NAT/router idle drop, cloud-side reset that
+    never reached us) still accepts writes, so every SET goes out into the
+    void, times out after 5s, and the socket stays "connected" — every
+    command keeps failing until the 120s keepalive (which can also write
+    into the void) happens to notice. If a SET fails while the socket
+    claims to be up, close it so the retry makes `_ensure_socket()` open a
+    fresh one (or fall back to the web portal). All SETs are absolute
+    values, so a retry is harmless even if the first one did land.
+    """
+    async with controller.command_lock:
+        if await send():
+            return True
+        if not controller.is_connected:
+            return False
+        _LOGGER.debug("Command not acknowledged on open socket; reopening and retrying")
+        receive_task = controller._receive_task
+        controller._close_writer()
+        if receive_task is not None:
+            await asyncio.wait({receive_task}, timeout=STALE_SOCKET_CLOSE_TIMEOUT)
+        return await send()
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> bool:
     """Set up IntesisHome from a config entry."""
@@ -51,8 +85,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> b
     # while the first is still opening the socket (e.g. two quick taps on a
     # climate +/- stepper) skips the socket path entirely and falls back to
     # the (slower, separately fallible) web portal. Serialising every
-    # command through this lock (see climate.py/button.py) avoids that race
-    # instead of working around pyintesishome's internals.
+    # command through this lock (via async_send_command below) avoids that
+    # race instead of working around pyintesishome's internals.
     controller.command_lock = asyncio.Lock()
 
     try:
