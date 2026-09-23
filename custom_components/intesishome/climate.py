@@ -270,9 +270,8 @@ class IntesisAC(ClimateEntity):
     async def _send_command(self, method: Callable[..., Awaitable[bool]], *args) -> bool:
         """Send one controller command via the shared async_send_command.
 
-        Serialises it against every other command on this account and
-        retries once on a stale command socket — see async_send_command in
-        __init__.py for why both are needed.
+        Serialises it against every other command on this account — see
+        command_lock's definition in __init__.py for why.
         """
         return await async_send_command(self._controller, lambda: method(*args))
 
