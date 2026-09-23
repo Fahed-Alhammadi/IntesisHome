@@ -42,28 +42,23 @@ async def async_send_command(
 
 
 class _IntesisHome(IntesisHome):
-    """IntesisHome with a web-portal fallback for unacknowledged socket SETs.
+    """IntesisHome that sends commands via the web portal, skipping the socket.
 
-    pyintesishome only falls back to the brand's web portal when the command
-    socket cannot be *opened*. Since IntesisHome's September 2026 server
-    change the socket opens and authenticates fine, but SETs sent over it
-    are never acknowledged (the socket is dropped instead) — every command
-    fails after the 5s ack timeout while the portal still works. So if a SET
-    went out over the socket and wasn't acknowledged, resend it through the
-    portal. SETs are absolute values, so a duplicate is harmless if the
-    socket one did land.
+    Since IntesisHome's September 2026 server change the command socket
+    opens and authenticates fine, but SETs sent over it are never
+    acknowledged — every command logged a "not acknowledged within 5.0s"
+    warning and waited out the timeout before anything else could run. The
+    brand's web portal still applies them. pyintesishome falls back to the
+    portal only when the socket can't be opened, so report it as unopenable
+    for services that have a portal: SETs then go straight there, with no
+    wasted 5s, no warning, and no socket connects (which Intesis is known to
+    blacklist IPs for). Services without a portal keep the socket path.
     """
 
-    async def _set_value(self, device_id, uid, value) -> bool:
-        seq_before = self._set_seq_counter
-        if await super()._set_value(device_id, uid, value):
-            return True
-        # An unchanged seqNo means the socket path never ran and the library
-        # already tried (and failed) the portal itself — don't repeat it.
-        if self._set_seq_counter == seq_before or self._device_type not in PORTAL_URL:
+    async def _ensure_socket(self) -> bool:
+        if self._device_type in PORTAL_URL:
             return False
-        _LOGGER.debug("SET uid=%s not acknowledged on socket; trying web portal", uid)
-        return await self._portal_set_value(device_id, uid, value)
+        return await super()._ensure_socket()
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> bool:
