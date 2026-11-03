@@ -1,0 +1,9 @@
+# Local Claude Code project notes (not published)
+/CLAUDE.md
+
+# Signing keys / secrets backup (never commit)
+/Keys/
+
+# Python bytecode
+__pycache__/
+*.pyc
