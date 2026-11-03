@@ -7,7 +7,7 @@ from datetime import timedelta
 import logging
 
 from pyintesishome import IHAuthenticationError, IHConnectionError, IntesisHome
-from pyintesishome.const import DEVICE_INTESISHOME, PORTAL_URL
+from pyintesishome.const import COMMAND_MAP, DEVICE_INTESISHOME, PORTAL_URL
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_DEVICE, CONF_PASSWORD, CONF_USERNAME, Platform
@@ -27,6 +27,11 @@ HEALTH_CHECK_INTERVAL = timedelta(minutes=5)
 # without this a stalled cloud endpoint can make every retry — at setup and
 # at each health check — ride out a long stall instead of failing fast.
 CONNECT_TIMEOUT = 30
+
+# State UIDs that pyintesishome's named setters write (power, mode, fan,
+# vanes, setpoint, preset). Raw writes outside this set (e.g. the filter
+# reset button's UID 184) are left for the next poll to report.
+_STATE_UIDS = frozenset(int(entry["uid"]) for entry in COMMAND_MAP.values())
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,6 +64,24 @@ class _IntesisHome(IntesisHome):
         if self._device_type in PORTAL_URL:
             return False
         return await super()._ensure_socket()
+
+    async def _set_value(self, device_id, uid, value) -> bool:
+        """Send a SET, then record the accepted value in the state cache.
+
+        pyintesishome only updates its cached device state from polls and
+        socket pushes. A SET sent through the web portal gets neither, so
+        after a successful "power off" the cache kept saying "on" until the
+        next poll (up to ~120s). Anything reading it in that window —
+        the climate entity's next refresh, set_hvac_mode's "is it already
+        on?" check, toggle — acted on the old value: e.g. turning the AC
+        off and then picking Cool skipped the power-on command, leaving
+        the AC off while Home Assistant showed it running. The next poll
+        still overwrites this with whatever the cloud reports.
+        """
+        ok = await super()._set_value(device_id, uid, value)
+        if ok and int(uid) in _STATE_UIDS and str(device_id) in self._devices:
+            self._update_device_state(device_id, int(uid), int(value))
+        return ok
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> bool:

@@ -285,17 +285,25 @@ class IntesisAC(ClimateEntity):
             self._expect_ack(ok, "power off")
         self._power = power_on
 
+    # turn_on/turn_off/toggle must write state themselves: HA only refreshes
+    # an entity after a service call when it polls, and this one doesn't, so
+    # without the write a climate.turn_off (power button, voice assistants,
+    # automations) left the card showing "on" until the next cloud poll.
+
     async def async_turn_on(self) -> None:
         """Turn device on."""
         await self._async_set_power(True)
+        self.async_write_ha_state()
 
     async def async_turn_off(self) -> None:
         """Turn device off."""
         await self._async_set_power(False)
+        self.async_write_ha_state()
 
     async def async_toggle(self) -> None:
         """Toggle power."""
         await self._async_set_power(not self._controller.is_on(self._device_id))
+        self.async_write_ha_state()
 
     async def async_set_temperature(self, **kwargs) -> None:
         """Set target temperature (and optionally switch mode at the same time)."""
@@ -321,9 +329,12 @@ class IntesisAC(ClimateEntity):
             self.async_write_ha_state()
             return
 
-        # Power on first if needed
-        if not self._controller.is_on(self._device_id):
-            await self._async_set_power(True)
+        # Always power on first, even if the cached state says it's already
+        # on. The cache is only as fresh as the last poll (~120s), so an AC
+        # switched off with its remote or the Intesis app can still look
+        # "on" here; skipping the power-on then left it off while HA showed
+        # the new mode. Re-sending power on to a running unit is harmless.
+        await self._async_set_power(True)
 
         ok = await self._send_command(
             self._controller.set_mode, self._device_id, MAP_HVAC_MODE_TO_IH[hvac_mode]
