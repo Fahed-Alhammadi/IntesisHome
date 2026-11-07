@@ -28,11 +28,13 @@ Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library 
 - **Fan speed control** — quiet, low, medium, high, auto (device-dependent).
 - **Vertical & horizontal swing** — full vane position control where supported.
 - **Preset modes** — eco, comfort, and powerful/boost where supported.
-- **Sensor entities** — outdoor temperature, heating power consumption (kW), cooling power consumption (kW), and Wi-Fi signal strength (diagnostic) are exposed as dedicated sensors (with device classes and long-term statistics) where the device reports them.
-- **Self-healing connection** — dropped cloud connections reconnect automatically with backoff, and a periodic health check revives the link if retries have stopped. If your password stops working, the reauth flow is triggered instead of entities staying unavailable.
-- **Device registry** — each AC unit is registered as a device, so its climate and sensor entities group together and can be assigned to areas.
+- **Sensor entities** — outdoor temperature, heating power consumption (kW), cooling power consumption (kW), and Wi-Fi signal strength (diagnostic) are exposed as dedicated sensors (with device classes and long-term statistics) where the device reports them. An error code sensor (disabled by default) and a filter due hours diagnostic sensor are also available.
+- **Binary sensors** — problem (device alarm), filter needs cleaning, and cloud connectivity (diagnostic).
+- **Reset filter button** — clears the filter-clean reminder on the unit.
+- **Self-healing connection** — connection errors are retried automatically in the background. If your password stops working, the reauth flow is triggered instead of entities staying unavailable.
+- **Device registry** — each AC unit is registered as a device, so its climate, sensor, binary sensor and button entities group together and can be assigned to areas.
 - **Re-authentication** — if your password changes, Home Assistant prompts you to re-enter it without removing and re-adding the integration.
-- **Cloud push** — the integration maintains a persistent connection to the IntesisHome cloud and receives state updates in real time without polling.
+- **Cloud polling** — device state is fetched from the cloud about every 2 minutes. Commands sent from Home Assistant show up immediately; changes made with the remote or the app appear on the next update.
 
 ---
 
@@ -40,7 +42,7 @@ Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library 
 
 - Home Assistant **2024.12** or newer
 - An active [IntesisHome](https://www.intesishome.com) / airconwithme / anywAiR account
-- `pyintesishome==2.2.0` (installed automatically)
+- `pyintesishome==2.5.0` (installed automatically)
 
 ---
 
@@ -75,10 +77,13 @@ Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library 
 
 ```
 custom_components/intesishome/
-├── __init__.py            # Integration setup and teardown
+├── __init__.py            # Integration setup, teardown and command handling
+├── entity.py              # Shared base class for sensors, binary sensors and buttons
 ├── climate.py             # ClimateEntity with mode-based icons
-├── sensor.py              # Outdoor temp & power consumption sensors
-├── config_flow.py         # UI config flow + re-auth (username + password)
+├── sensor.py              # Temperature, power, Wi-Fi, error code & filter sensors
+├── binary_sensor.py       # Problem, filter clean & connectivity binary sensors
+├── button.py              # Reset filter button
+├── config_flow.py         # UI config flow + re-auth (service, username + password)
 ├── manifest.json          # Integration metadata
 ├── strings.json           # UI string keys
 └── translations/
