@@ -30,6 +30,11 @@ _LOGGER = logging.getLogger(__name__)
 # Push-based integration: no need to serialise entity updates.
 PARALLEL_UPDATES = 0
 
+# HA 2026.11 renamed the climate temperature API to native_* names (the old
+# ones log a deprecation warning and stop working in 2027.11). Older HA only
+# knows the old names, so IntesisAC provides them as aliases there.
+_HA_NATIVE_TEMPERATURE_API = hasattr(ClimateEntity, "native_temperature_unit")
+
 # Lowest setpoint offered in HA regardless of what the cloud reports.
 # Also used as the fallback before the device reports its own minimum
 # (instead of HA's 7 °C default). Lower this (e.g. to 16.0) to allow
@@ -121,7 +126,9 @@ class IntesisAC(ClimateEntity):
     _attr_has_entity_name = True
     _attr_name = None
     _attr_should_poll = False
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
+    if not _HA_NATIVE_TEMPERATURE_API:
+        _attr_temperature_unit = UnitOfTemperature.CELSIUS
 
     def __init__(
         self, ih_device_id: str, ih_device: dict, controller: IntesisBase
@@ -415,16 +422,28 @@ class IntesisAC(ClimateEntity):
         return HVACMode.OFF
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         """Return the current measured temperature."""
         return self._current_temp
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         """Return setpoint; hidden for fan-only and off states."""
         if self._power and self.hvac_mode not in [HVACMode.FAN_ONLY, HVACMode.OFF]:
             return self._target_temp
         return None
+
+    if not _HA_NATIVE_TEMPERATURE_API:
+        # HA < 2026.11 reads these names instead of the native_* ones.
+        @property
+        def current_temperature(self) -> float | None:
+            """Alias of native_current_temperature for HA < 2026.11."""
+            return self.native_current_temperature
+
+        @property
+        def target_temperature(self) -> float | None:
+            """Alias of native_target_temperature for HA < 2026.11."""
+            return self.native_target_temperature
 
     @property
     def target_temperature_step(self) -> float:
