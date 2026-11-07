@@ -3,46 +3,102 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
 ![version](https://img.shields.io/badge/version-2.0.2-blue)
 ![HA](https://img.shields.io/badge/Home%20Assistant-2024.12%2B-green)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A native Home Assistant custom integration for **IntesisHome** cloud-connected AC controllers (airconwithme / anywAiR devices).
+A Home Assistant custom integration for air conditioners connected through the **IntesisHome**, **airconwithme** or **anywAiR** cloud services.
 
-Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library with a clean UI config flow, dynamic mode detection, and mode-based MDI icons.
+Set it up from the UI, control each AC unit as a climate entity, and get sensors, binary sensors and a filter-reset button for whatever your unit reports. Built on [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome).
+
+---
+
+## Contents
+
+- [Features](#features)
+- [Entities](#entities)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Setup](#setup)
+- [How it works](#how-it-works)
+- [Known limitations](#known-limitations)
+- [Troubleshooting](#troubleshooting)
+- [Removal](#removal)
+- [Project structure](#project-structure)
+- [Contributing](#contributing)
+- [Credits](#credits)
+- [License](#license)
 
 ---
 
 ## Features
 
-- **UI config flow** — select IntesisHome, airconwithme, or anywAiR, then sign in with your account. No YAML required.
-- **Mode-based icons** — the entity icon in HA changes to reflect the active HVAC mode:
+- **UI setup**: pick your cloud service (IntesisHome, airconwithme or anywAiR) and sign in. No YAML needed.
+- **Full climate control**: HVAC mode, target temperature, fan speed, vertical and horizontal swing (vane positions) and presets.
+- **Only what your unit supports**: HVAC modes, fan speeds, swing positions and presets are read from the device and kept up to date, so HA never offers options your AC can't do.
+- **Icons that follow the mode**: the climate entity's icon changes with the active HVAC mode.
+- **Energy and diagnostics**: outdoor temperature, heating and cooling power (kW, with long-term statistics), Wi-Fi signal, error code and filter status.
+- **One device per AC unit**: all entities for a unit are grouped under one device in the device registry, so you can assign it to an area.
+- **Recovers on its own**: connection errors are retried in the background. If your password is rejected, Home Assistant asks you to re-enter it, and you don't need to remove the integration.
+- **Reliable commands**: every command is checked against the cloud's reply. If the cloud rejects it, you get an error in HA rather than a silent failure.
 
-  | Mode | Icon |
-  |------|------|
-  | Cool | `mdi:snowflake` ❄️ |
-  | Heat | `mdi:white-balance-sunny` ☀️ |
-  | Dry | `mdi:water-off` 💧 |
-  | Fan only | `mdi:fan` 🌀 |
-  | Auto | `mdi:cached` 🔄 |
-  | Off | *(default thermostat icon)* |
+---
 
-- **Dynamic mode detection** — supported HVAC modes are read directly from your device at setup, so only modes your AC actually supports appear in HA.
-- **Fan speed control** — quiet, low, medium, high, auto (device-dependent).
-- **Vertical & horizontal swing** — full vane position control where supported.
-- **Preset modes** — eco, comfort, and powerful/boost where supported.
-- **Sensor entities** — outdoor temperature, heating power consumption (kW), cooling power consumption (kW), and Wi-Fi signal strength (diagnostic) are exposed as dedicated sensors (with device classes and long-term statistics) where the device reports them. An error code sensor (disabled by default) and a filter due hours diagnostic sensor are also available.
-- **Binary sensors** — problem (device alarm), filter needs cleaning, and cloud connectivity (diagnostic).
-- **Reset filter button** — clears the filter-clean reminder on the unit.
-- **Self-healing connection** — connection errors are retried automatically in the background. If your password stops working, the reauth flow is triggered instead of entities staying unavailable.
-- **Device registry** — each AC unit is registered as a device, so its climate, sensor, binary sensor and button entities group together and can be assigned to areas.
-- **Re-authentication** — if your password changes, Home Assistant prompts you to re-enter it without removing and re-adding the integration.
-- **Cloud polling** — device state is fetched from the cloud about every 2 minutes. Commands sent from Home Assistant show up immediately; changes made with the remote or the app appear on the next update.
+## Entities
+
+Each AC unit creates the entities below. Entities other than the climate entity are only created if the unit reports that value.
+
+### Climate
+
+| Feature | Values |
+|---|---|
+| HVAC modes | Off, Heat, Cool, Dry, Fan only, Auto *(device-dependent)* |
+| Fan modes | Quiet, Low, Medium, High, Auto *(device-dependent)* |
+| Swing | Vertical and horizontal vane positions *(where supported)* |
+| Presets | Eco, Comfort, Boost (Powerful) *(where supported)* |
+| Extra attributes | `rssi` (Wi-Fi signal), `run_hours` |
+
+Mode-based icons:
+
+| Mode | Icon |
+|---|---|
+| Cool | `mdi:snowflake` |
+| Heat | `mdi:white-balance-sunny` |
+| Dry | `mdi:water-off` |
+| Fan only | `mdi:fan` |
+| Auto | `mdi:cached` |
+| Off | default thermostat icon |
+
+### Sensors
+
+| Entity | Unit | Category | Enabled by default |
+|---|---|---|---|
+| Outdoor temperature | °C | — | ✅ |
+| Heating power consumption | kW | — | ✅ |
+| Cooling power consumption | kW | — | ✅ |
+| Wi-Fi signal strength | dBm | Diagnostic | ✅ |
+| Filter due | h | Diagnostic | ✅ |
+| Error code | — | Diagnostic | ❌ |
+
+### Binary sensors
+
+| Entity | Meaning | Category |
+|---|---|---|
+| Problem | The unit is reporting an alarm | Diagnostic |
+| Filter | The filter needs cleaning | Diagnostic |
+| Connectivity | The cloud has fresh data for the unit | Diagnostic |
+
+### Buttons
+
+| Entity | Action | Category |
+|---|---|---|
+| Reset filter | Clears the filter-clean reminder on the unit | Configuration |
 
 ---
 
 ## Requirements
 
 - Home Assistant **2024.12** or newer
-- An active [IntesisHome](https://www.intesishome.com) / airconwithme / anywAiR account
-- `pyintesishome==2.5.0` (installed automatically)
+- An active [IntesisHome](https://www.intesishome.com), airconwithme or anywAiR account with at least one AC unit linked to it
+- [`pyintesishome`](https://pypi.org/project/pyintesishome/) **2.5.0** (Home Assistant installs it automatically)
 
 ---
 
@@ -50,51 +106,65 @@ Built on the [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome) library 
 
 ### HACS (recommended)
 
-1. Open HACS in Home Assistant
-2. Go to **Integrations** → click the three-dot menu → **Custom repositories**
-3. Add `https://github.com/Fahed-Alhammadi/IntesisHome` as an **Integration**
-4. Search for **IntesisHome** and install it
-5. Restart Home Assistant
+1. Open **HACS** in Home Assistant.
+2. Open the three-dot menu → **Custom repositories**.
+3. Add `https://github.com/Fahed-Alhammadi/IntesisHome` with the type **Integration**.
+4. Search for **IntesisHome** and click **Download**.
+5. Restart Home Assistant.
 
 ### Manual
 
-1. Download the latest release zip from the [Releases](https://github.com/Fahed-Alhammadi/IntesisHome/releases) page
-2. Extract and copy the `custom_components/intesishome/` folder into your HA `config/custom_components/` directory
-3. Restart Home Assistant
+1. Download the latest release from the [Releases](https://github.com/Fahed-Alhammadi/IntesisHome/releases) page.
+2. Copy the `custom_components/intesishome/` folder into your Home Assistant `config/custom_components/` folder.
+3. Restart Home Assistant.
 
 ---
 
 ## Setup
 
-1. Go to **Settings → Devices & Services → Add Integration**
-2. Search for **IntesisHome**
-3. Select the cloud service used by your account, then enter your **username** and **password**
-4. Each AC unit linked to your account will appear as a separate climate device
+1. Go to **Settings → Devices & Services → Add Integration**.
+2. Search for **IntesisHome**.
+3. Pick the **cloud service** your account uses (IntesisHome, airconwithme or anywAiR).
+4. Enter your **username** and **password**.
+
+Each AC unit linked to the account appears as its own device.
+
+If your password changes, Home Assistant shows a re-authentication prompt once the cloud rejects the old one (checked every 5 minutes).
 
 ---
 
-## File Structure
+## How it works
 
-```
-custom_components/intesishome/
-├── __init__.py            # Integration setup, teardown and command handling
-├── entity.py              # Shared base class for sensors, binary sensors and buttons
-├── climate.py             # ClimateEntity with mode-based icons
-├── sensor.py              # Temperature, power, Wi-Fi, error code & filter sensors
-├── binary_sensor.py       # Problem, filter clean & connectivity binary sensors
-├── button.py              # Reset filter button
-├── config_flow.py         # UI config flow + re-auth (service, username + password)
-├── manifest.json          # Integration metadata
-├── strings.json           # UI string keys
-└── translations/
-    └── en.json            # English labels
-```
+- **Updates**: the integration fetches device state from the cloud about every **2 minutes**. Entities update as soon as new data arrives, and Home Assistant never polls them itself.
+- **Commands**: changes made in Home Assistant show up right away. Changes made with the remote control or the vendor app show up on the next update, within about 2 minutes.
+- **IntesisHome service**: commands are sent through the IntesisHome web portal. This avoids the command socket, which stopped acknowledging commands in September 2026.
+- **airconwithme / anywAiR**: commands are sent over the cloud command socket.
+- **Health check**: every 5 minutes the integration checks whether the cloud has rejected your credentials. If it has, it starts the re-authentication flow.
 
 ---
 
-## Debugging
+## Known limitations
 
-To enable debug logging, add the following to your `configuration.yaml`:
+- **Cloud only**: no local control. If the vendor's cloud is down, the units can't be controlled from Home Assistant.
+- **Up to ~2 minutes delay** before changes made outside Home Assistant appear.
+- **Minimum setpoint**: the lowest target temperature offered is **18 °C**, or the unit's own minimum if that is lower.
+- **Capabilities reported late**: if a unit starts reporting a sensor value after setup, reload the integration to create that entity.
+
+---
+
+## Troubleshooting
+
+| Symptom | What to try |
+|---|---|
+| `invalid_auth` during setup | Check the username and password, and make sure the right **cloud service** is selected. |
+| `no_devices` during setup | Link the unit to your account in the vendor app first. |
+| Entities are unavailable | The cloud may be unreachable. The integration keeps retrying; check the **Connectivity** binary sensor and the logs. |
+| A command fails with an error | The cloud didn't accept the command. Try again; if it keeps failing, enable debug logging (below) and open an issue. |
+| State changed with the remote isn't shown yet | Wait up to ~2 minutes for the next cloud update. |
+
+### Debug logging
+
+Add this to `configuration.yaml` and restart Home Assistant:
 
 ```yaml
 logger:
@@ -104,17 +174,62 @@ logger:
     pyintesishome: debug
 ```
 
-Then restart Home Assistant and reproduce the issue. Logs can be downloaded from **Settings → System → Logs**.
+Reproduce the issue, then download the logs from **Settings → System → Logs**. Remove usernames, passwords and device IDs before sharing logs in an issue.
+
+---
+
+## Removal
+
+1. Go to **Settings → Devices & Services → IntesisHome**, open the menu and choose **Delete**.
+2. If you installed it with HACS, remove it in HACS as well. If you installed it manually, delete `config/custom_components/intesishome/`.
+3. Restart Home Assistant.
+
+---
+
+## Project structure
+
+```
+custom_components/intesishome/
+├── __init__.py            # Setup/teardown, command handling, health check
+├── entity.py              # Shared base class for sensors, binary sensors and buttons
+├── climate.py             # Climate entity (modes, fan, swing, presets, icons)
+├── sensor.py              # Temperature, power, Wi-Fi, error code and filter sensors
+├── binary_sensor.py       # Problem, filter and connectivity binary sensors
+├── button.py              # Reset filter button
+├── config_flow.py         # UI setup and re-authentication
+├── manifest.json          # Integration metadata (version, requirements)
+├── strings.json           # UI strings
+└── translations/
+    └── en.json            # English translations
+```
+
+---
+
+## Contributing
+
+Bug reports and pull requests are welcome.
+
+- **Bugs and feature requests**: open an [issue](https://github.com/Fahed-Alhammadi/IntesisHome/issues). Include your Home Assistant version, the integration version, your cloud service and debug logs.
+- **Pull requests**:
+  1. Fork the repository and create a branch.
+  2. Keep `strings.json` and `translations/en.json` in sync.
+  3. Check syntax with `python3 -m py_compile custom_components/intesishome/*.py` (Python 3.12+).
+  4. Test the change in a real Home Assistant instance. The project has no automated test suite yet.
+  5. When releasing, bump the version in `manifest.json` and in the README badge together.
 
 ---
 
 ## Credits
 
-- Based on the excellent work of [@jnimmo](https://github.com/jnimmo) in [hass-intesishome](https://github.com/jnimmo/hass-intesishome) and [pyIntesisHome](https://github.com/jnimmo/pyIntesisHome)
-- Maintained by [@Fahed-Alhammadi](https://github.com/Fahed-Alhammadi)
+- Based on the work of [@jnimmo](https://github.com/jnimmo) in [hass-intesishome](https://github.com/jnimmo/hass-intesishome) and [pyIntesisHome](https://github.com/jnimmo/pyIntesisHome).
+- Maintained by [@Fahed-Alhammadi](https://github.com/Fahed-Alhammadi).
+
+This project is not affiliated with or endorsed by Intesis, HMS Networks, airconwithme or anywAiR.
 
 ---
 
 ## License
 
-MIT License — see [LICENSE](LICENSE) for details.
+Released under the MIT License. See [LICENSE](LICENSE) for details.
+
+© 2026 Fahed Alhammadi. All rights reserved.
