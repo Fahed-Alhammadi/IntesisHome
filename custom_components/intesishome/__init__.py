@@ -28,6 +28,10 @@ HEALTH_CHECK_INTERVAL = timedelta(minutes=5)
 # at each health check — ride out a long stall instead of failing fast.
 CONNECT_TIMEOUT = 30
 
+# Pause before resending a SET the web portal failed (see
+# _IntesisHome._portal_set_value_with_retry).
+PORTAL_RETRY_DELAY = 2
+
 # State UIDs that pyintesishome's named setters write (power, mode, fan,
 # vanes, setpoint, preset). Raw writes outside this set (e.g. the filter
 # reset button's UID 184) are left for the next poll to report.
@@ -53,17 +57,11 @@ class _IntesisHome(IntesisHome):
     opens and authenticates fine, but SETs sent over it are never
     acknowledged — every command logged a "not acknowledged within 5.0s"
     warning and waited out the timeout before anything else could run. The
-    brand's web portal still applies them. pyintesishome falls back to the
-    portal only when the socket can't be opened, so report it as unopenable
-    for services that have a portal: SETs then go straight there, with no
-    wasted 5s, no warning, and no socket connects (which Intesis is known to
-    blacklist IPs for). Services without a portal keep the socket path.
+    brand's web portal still applies them, so for services that have a
+    portal every SET goes straight there: no wasted 5s, no warning, and no
+    socket connects (which Intesis is known to blacklist IPs for). Services
+    without a portal keep pyintesishome's socket path.
     """
-
-    async def _ensure_socket(self) -> bool:
-        if self._device_type in PORTAL_URL:
-            return False
-        return await super()._ensure_socket()
 
     async def _set_value(self, device_id, uid, value) -> bool:
         """Send a SET, then record the accepted value in the state cache.
@@ -78,10 +76,43 @@ class _IntesisHome(IntesisHome):
         the AC off while Home Assistant showed it running. The next poll
         still overwrites this with whatever the cloud reports.
         """
-        ok = await super()._set_value(device_id, uid, value)
+        if self._device_type in PORTAL_URL:
+            ok = await self._portal_set_value_with_retry(device_id, uid, value)
+        else:
+            ok = await super()._set_value(device_id, uid, value)
         if ok and int(uid) in _STATE_UIDS and str(device_id) in self._devices:
             self._update_device_state(device_id, int(uid), int(value))
         return ok
+
+    async def _portal_set_value_with_retry(self, device_id, uid, value) -> bool:
+        """Send one SET via the web portal, retrying once after a short pause.
+
+        The portal has brief hiccups — a dropped connection ("Server
+        disconnected") or a login page served without its form ("no CSRF
+        token") — that clear within seconds. pyintesishome's own retry only
+        covers an expired session, not these, so without this a single
+        hiccup failed the command. A failed attempt drops the cached portal
+        login, so the retry logs in fresh. SETs are absolute values, so
+        resending one the portal may have already applied is harmless.
+
+        Calling the portal directly (rather than via pyintesishome's
+        _set_value) also avoids its "no command socket … needs outbound
+        access to <ip>:5210" warning, which is misleading here: the socket
+        is skipped on purpose, and opening that port would not help.
+        """
+        if await self._portal_set_value(device_id, uid, value):
+            return True
+        await asyncio.sleep(PORTAL_RETRY_DELAY)
+        if await self._portal_set_value(device_id, uid, value):
+            return True
+        _LOGGER.warning(
+            "IntesisHome web portal (%s) did not accept SET uid=%s value=%s "
+            "after a retry; usually a temporary portal outage",
+            PORTAL_URL[self._device_type],
+            uid,
+            value,
+        )
+        return False
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> bool:

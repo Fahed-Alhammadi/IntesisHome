@@ -5,7 +5,7 @@
 **Control IntesisHome, airconwithme and anywAiR air conditioners from Home Assistant.**
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![Version](https://img.shields.io/badge/version-2.0.2-blue.svg?style=for-the-badge)](https://github.com/Fahed-Alhammadi/IntesisHome/releases)
+[![Version](https://img.shields.io/badge/version-2.0.3-blue.svg?style=for-the-badge)](https://github.com/Fahed-Alhammadi/IntesisHome/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.12%2B-41BDF5.svg?style=for-the-badge&logo=homeassistant&logoColor=white)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
@@ -147,7 +147,7 @@ If your password changes, Home Assistant shows a re-authentication prompt once t
 
 - **Updates**: the integration fetches device state from the cloud about every **2 minutes**. Entities update as soon as new data arrives, and Home Assistant never polls them itself.
 - **Commands**: changes made in Home Assistant show up right away. Changes made with the remote control or the vendor app show up on the next update, within about 2 minutes.
-- **IntesisHome service**: commands are sent through the IntesisHome web portal. This avoids the command socket, which stopped acknowledging commands in September 2026.
+- **IntesisHome service**: commands are sent through the IntesisHome web portal. This avoids the command socket, which stopped acknowledging commands in September 2026. If the portal fails a command, it is retried once after 2 seconds.
 - **airconwithme / anywAiR**: commands are sent over the cloud command socket.
 - **Health check**: every 5 minutes the integration checks whether the cloud has rejected your credentials. If it has, it starts the re-authentication flow.
 
@@ -170,6 +170,7 @@ If your password changes, Home Assistant shows a re-authentication prompt once t
 | `no_devices` during setup | Link the unit to your account in the vendor app first. |
 | Entities are unavailable | The cloud may be unreachable. The integration keeps retrying; check the **Connectivity** binary sensor and the logs. |
 | A command fails with an error | The cloud didn't accept the command. Try again; if it keeps failing, enable debug logging (below) and open an issue. |
+| `Poll of IntesisHome failed: Connection timeout` in the logs | The cloud didn't answer one update in time. The next update is tried about 2 minutes later, so a few of these a day can be ignored. |
 | State changed with the remote isn't shown yet | Wait up to ~2 minutes for the next cloud update. |
 
 ### Debug logging
