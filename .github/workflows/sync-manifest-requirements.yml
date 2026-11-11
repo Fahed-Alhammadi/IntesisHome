@@ -1,0 +1,53 @@
+name: Sync manifest requirements
+
+# Dependabot only edits requirements.txt. Copy its pins into manifest.json
+# (what Home Assistant actually installs) on the same PR branch.
+on:
+  pull_request:
+    paths:
+      - requirements.txt
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref }}
+
+      - name: Copy requirements.txt pins into manifest.json
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, re
+
+          reqs = [
+              line.strip()
+              for line in pathlib.Path("requirements.txt").read_text().splitlines()
+              if line.strip() and not line.strip().startswith("#")
+          ]
+          path = pathlib.Path("custom_components/intesishome/manifest.json")
+          text = path.read_text()
+          new = re.sub(
+              r'"requirements":\s*\[[^\]]*\]',
+              '"requirements": ' + json.dumps(reqs),
+              text,
+              count=1,
+          )
+          json.loads(new)  # fail the job if the result isn't valid JSON
+          path.write_text(new)
+          PY
+
+      - name: Commit if changed
+        run: |
+          if git diff --quiet; then
+            echo "manifest.json already in sync"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Sync manifest.json requirements with requirements.txt"
+          git push
