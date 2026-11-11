@@ -221,6 +221,7 @@ custom_components/intesishome/
 Bug reports and pull requests are welcome.
 
 - **Bugs and feature requests**: open an [issue](https://github.com/Fahed-Alhammadi/IntesisHome/issues). Include your Home Assistant version, the integration version, your cloud service and debug logs.
+- **Security vulnerabilities**: do not open a public issue. See [SECURITY.md](SECURITY.md) for how to report them privately.
 - **Pull requests**:
   1. Fork the repository and create a branch.
   2. Keep `strings.json` and `translations/en.json` in sync.
