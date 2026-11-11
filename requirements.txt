@@ -1,5 +1,0 @@
-# Runtime dependencies of the integration. Mirrors "requirements" in
-# custom_components/intesishome/manifest.json so Dependabot can track them
-# (it cannot read Home Assistant manifests). On Dependabot PRs the
-# sync-manifest-requirements workflow copies these pins into manifest.json.
-pyintesishome==2.5.0
