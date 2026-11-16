@@ -1,4 +1,4 @@
-"""Sensors for IntesisHome devices (outdoor temperature, power consumption)."""
+"""Sensors for IntesisHome devices (outdoor temperature, diagnostics)."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -15,7 +15,6 @@ from homeassistant.components.sensor import (
 from homeassistant.const import (
     SIGNAL_STRENGTH_DECIBELS_MILLIWATT,
     EntityCategory,
-    UnitOfPower,
     UnitOfTemperature,
     UnitOfTime,
 )
@@ -27,13 +26,6 @@ from .entity import IntesisEntity
 
 # Push-based integration: no need to serialise entity updates.
 PARALLEL_UPDATES = 0
-
-
-def _to_kw(value: float | None) -> float | None:
-    """Convert a raw watt reading to kilowatts."""
-    if value is None:
-        return None
-    return round(value / 1000, 1)
 
 
 def _to_number(value) -> float | None:
@@ -51,20 +43,6 @@ class IntesisSensorEntityDescription(SensorEntityDescription):
     """Describes an IntesisHome sensor."""
 
     value_fn: Callable[[IntesisBase, str], float | None]
-    # Raw device property whose presence means the device supports this
-    # sensor. When unset, the sensor is created if value_fn returns a value.
-    required_property: str | None = None
-
-
-def _raw_number(controller: IntesisBase, device_id: str, prop: str) -> float | None:
-    """Read a raw device property as a number (0 stays 0, missing is None).
-
-    Used instead of pyintesishome's get_*_power_consumption() helpers, which
-    return None for a 0 reading: an idle unit showed "unknown" instead of
-    0 kW, and if it was idle when Home Assistant started, the sensor was
-    never created at all.
-    """
-    return _to_number(controller.get_device_property(device_id, prop))
 
 
 SENSOR_TYPES: tuple[IntesisSensorEntityDescription, ...] = (
@@ -76,30 +54,6 @@ SENSOR_TYPES: tuple[IntesisSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda controller, device_id: controller.get_outdoor_temperature(
             device_id
-        ),
-    ),
-    IntesisSensorEntityDescription(
-        key="power_consumption_heat",
-        translation_key="power_consumption_heat",
-        device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement=UnitOfPower.KILO_WATT,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=1,
-        required_property="aquarea_heat_consumption",
-        value_fn=lambda controller, device_id: _to_kw(
-            _raw_number(controller, device_id, "aquarea_heat_consumption")
-        ),
-    ),
-    IntesisSensorEntityDescription(
-        key="power_consumption_cool",
-        translation_key="power_consumption_cool",
-        device_class=SensorDeviceClass.POWER,
-        native_unit_of_measurement=UnitOfPower.KILO_WATT,
-        state_class=SensorStateClass.MEASUREMENT,
-        suggested_display_precision=1,
-        required_property="aquarea_cool_consumption",
-        value_fn=lambda controller, device_id: _to_kw(
-            _raw_number(controller, device_id, "aquarea_cool_consumption")
         ),
     ),
     IntesisSensorEntityDescription(
@@ -157,11 +111,7 @@ async def async_setup_entry(
     for device_id, device in ih_devices.items():
         for description in SENSOR_TYPES:
             # Only create the sensor if the device actually reports this value.
-            if description.required_property is not None:
-                supported = description.required_property in device
-            else:
-                supported = description.value_fn(controller, device_id) is not None
-            if supported:
+            if description.value_fn(controller, device_id) is not None:
                 entities.append(
                     IntesisSensor(controller, device_id, device, description)
                 )

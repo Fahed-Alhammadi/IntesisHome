@@ -10,7 +10,7 @@ from pyintesishome import IHAuthenticationError, IHConnectionError, IntesisHome
 from pyintesishome.const import COMMAND_MAP, DEVICE_INTESISHOME, PORTAL_URL
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_DEVICE, CONF_PASSWORD, CONF_USERNAME, Platform
+from homeassistant.const import CONF_PASSWORD, CONF_USERNAME, Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -59,10 +59,12 @@ class _IntesisHome(IntesisHome):
     opens and authenticates fine, but SETs sent over it are never
     acknowledged — every command logged a "not acknowledged within 5.0s"
     warning and waited out the timeout before anything else could run. The
-    brand's web portal still applies them, so for services that have a
-    portal every SET goes straight there: no wasted 5s, no warning, and no
-    socket connects (which Intesis is known to blacklist IPs for). Services
-    without a portal keep pyintesishome's socket path.
+    web portal still applies them, so every SET goes straight there: no
+    wasted 5s, no warning, and no socket connects (which Intesis is known to
+    blacklist IPs for).
+
+    Only the IntesisHome cloud service is supported (the one this
+    integration is built for); airconwithme/anywAiR have no web portal.
     """
 
     async def _poll_status(self, sendcallback=False):
@@ -115,10 +117,7 @@ class _IntesisHome(IntesisHome):
         the AC off while Home Assistant showed it running. The next poll
         still overwrites this with whatever the cloud reports.
         """
-        if self._device_type in PORTAL_URL:
-            ok = await self._portal_set_value_with_retry(device_id, uid, value)
-        else:
-            ok = await super()._set_value(device_id, uid, value)
+        ok = await self._portal_set_value_with_retry(device_id, uid, value)
         if ok and int(uid) in _STATE_UIDS and str(device_id) in self._devices:
             self._update_device_state(device_id, int(uid), int(value))
         return ok
@@ -156,10 +155,7 @@ class _IntesisHome(IntesisHome):
 
 async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> bool:
     """Set up IntesisHome from a config entry."""
-    # Older entries were created before the service selector existed. Keep
-    # their historical IntesisHome behaviour until the user selects a
-    # different cloud service during reauth.
-    device_type = entry.data.get(CONF_DEVICE, DEVICE_INTESISHOME)
+    device_type = DEVICE_INTESISHOME
     controller = _IntesisHome(
         entry.data[CONF_USERNAME],
         entry.data[CONF_PASSWORD],
@@ -167,14 +163,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> b
         websession=async_get_clientsession(hass),
         device_type=device_type,
     )
-    # pyintesishome opens one command socket per controller, shared by every
-    # device/entity under this entry, and guards concurrent opens with a
-    # plain bool (_connecting) rather than a lock — a second SET issued
-    # while the first is still opening the socket (e.g. two quick taps on a
-    # climate +/- stepper) skips the socket path entirely and falls back to
-    # the (slower, separately fallible) web portal. Serialising every
-    # command through this lock (via async_send_command below) avoids that
-    # race instead of working around pyintesishome's internals.
+    # Serialises every command on this account (via async_send_command), so
+    # commands reach the portal in the order they were issued, retry
+    # included: two quick +/- taps can't overtake each other, and the cache
+    # update after each accepted SET can't be overwritten by an older one.
     controller.command_lock = asyncio.Lock()
 
     try:

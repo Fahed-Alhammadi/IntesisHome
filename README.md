@@ -2,10 +2,10 @@
 
 # IntesisHome for Home Assistant
 
-**Control IntesisHome, airconwithme and anywAiR air conditioners from Home Assistant.**
+**Control IntesisHome air conditioners from Home Assistant.**
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![Version](https://img.shields.io/badge/version-2.0.4-blue.svg?style=for-the-badge)](https://github.com/Fahed-Alhammadi/IntesisHome/releases)
+[![Version](https://img.shields.io/badge/version-2.0.5-blue.svg?style=for-the-badge)](https://github.com/Fahed-Alhammadi/IntesisHome/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.12%2B-41BDF5.svg?style=for-the-badge&logo=homeassistant&logoColor=white)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 
@@ -15,7 +15,7 @@
 
 ---
 
-A Home Assistant custom integration for air conditioners connected through the **IntesisHome**, **airconwithme** or **anywAiR** cloud services.
+A Home Assistant custom integration for air conditioners connected through the **IntesisHome** cloud service.
 
 Set it up from the UI, control each AC unit as a climate entity, and get sensors, binary sensors and a filter-reset button for whatever your unit reports. Built on [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome).
 
@@ -41,11 +41,11 @@ Set it up from the UI, control each AC unit as a climate entity, and get sensors
 
 ## Features
 
-- **UI setup**: pick your cloud service (IntesisHome, airconwithme or anywAiR) and sign in. No YAML needed.
+- **UI setup**: sign in with your IntesisHome account. No YAML needed.
 - **Full climate control**: HVAC mode, target temperature, fan speed, vertical and horizontal swing (vane positions) and presets.
 - **Only what your unit supports**: HVAC modes, fan speeds, swing positions and presets are read from the device and kept up to date, so HA never offers options your AC can't do.
 - **Icons that follow the mode**: the climate entity's icon changes with the active HVAC mode.
-- **Energy and diagnostics**: outdoor temperature, heating and cooling power (kW, with long-term statistics), Wi-Fi signal, error code and filter status.
+- **Diagnostics**: outdoor temperature, Wi-Fi signal, error code, filter status and a connectivity sensor.
 - **One device per AC unit**: all entities for a unit are grouped under one device in the device registry, so you can assign it to an area.
 - **Recovers on its own**: connection errors are retried in the background. If your password is rejected, Home Assistant asks you to re-enter it, and you don't need to remove the integration.
 - **Reliable commands**: every command is checked against the cloud's reply. If the cloud rejects it, you get an error in HA rather than a silent failure.
@@ -82,8 +82,6 @@ Mode-based icons:
 | Entity | Unit | Category | Enabled by default |
 |---|---|---|---|
 | Outdoor temperature | °C | — | ✅ |
-| Heating power consumption | kW | — | ✅ |
-| Cooling power consumption | kW | — | ✅ |
 | Wi-Fi signal strength | dBm | Diagnostic | ✅ |
 | Filter due | h | Diagnostic | ✅ |
 | Error code | — | Diagnostic | ❌ |
@@ -107,7 +105,7 @@ Mode-based icons:
 ## Requirements
 
 - Home Assistant **2024.12** or newer
-- An active [IntesisHome](https://www.intesishome.com), airconwithme or anywAiR account with at least one AC unit linked to it
+- An active [IntesisHome](https://www.intesishome.com) account with at least one AC unit linked to it
 - [`pyintesishome`](https://pypi.org/project/pyintesishome/) **2.5.0** (Home Assistant installs it automatically)
 
 ---
@@ -134,12 +132,11 @@ Mode-based icons:
 
 1. Go to **Settings → Devices & Services → Add Integration**.
 2. Search for **IntesisHome**.
-3. Pick the **cloud service** your account uses (IntesisHome, airconwithme or anywAiR).
-4. Enter your **username** and **password**.
+3. Enter your IntesisHome **username** and **password**.
 
 Each AC unit linked to the account appears as its own device.
 
-If your password changes, Home Assistant shows a re-authentication prompt once the cloud rejects the old one (checked every 5 minutes).
+If your password changes, Home Assistant shows a re-authentication prompt once the cloud rejects the old one (checked every minute).
 
 ---
 
@@ -147,9 +144,8 @@ If your password changes, Home Assistant shows a re-authentication prompt once t
 
 - **Updates**: the integration fetches device state from the cloud about every **2 minutes**. Entities update as soon as new data arrives, and Home Assistant never polls them itself.
 - **Commands**: changes made in Home Assistant show up right away. Changes made with the remote control or the vendor app show up on the next update, within about 2 minutes.
-- **IntesisHome service**: commands are sent through the IntesisHome web portal. This avoids the command socket, which stopped acknowledging commands in September 2026. If the portal fails a command, it is retried once after 2 seconds.
-- **airconwithme / anywAiR**: commands are sent over the cloud command socket.
-- **Health check**: every 5 minutes the integration checks whether the cloud has rejected your credentials. If it has, it starts the re-authentication flow.
+- **Commands go through the web portal**: commands are sent through the IntesisHome web portal. This avoids the command socket, which stopped acknowledging commands in September 2026. If the portal fails a command, it is retried once after 2 seconds.
+- **Health check**: every minute the integration marks entities unavailable if the cloud has had no fresh data for about 5 minutes (and available again when it does), restarts background updates if they ever stop, and starts the re-authentication flow if the cloud has rejected your credentials.
 
 ---
 
@@ -166,7 +162,7 @@ If your password changes, Home Assistant shows a re-authentication prompt once t
 
 | Symptom | What to try |
 |---|---|
-| `invalid_auth` during setup | Check the username and password, and make sure the right **cloud service** is selected. |
+| `invalid_auth` during setup | Check the username and password. |
 | `no_devices` during setup | Link the unit to your account in the vendor app first. |
 | Entities are unavailable | The cloud may be unreachable. The integration keeps retrying; check the **Connectivity** binary sensor and the logs. |
 | A command fails with an error | The cloud didn't accept the command. Try again; if it keeps failing, enable debug logging (below) and open an issue. |
@@ -220,7 +216,7 @@ custom_components/intesishome/
 
 Bug reports and pull requests are welcome.
 
-- **Bugs and feature requests**: open an [issue](https://github.com/Fahed-Alhammadi/IntesisHome/issues). Include your Home Assistant version, the integration version, your cloud service and debug logs.
+- **Bugs and feature requests**: open an [issue](https://github.com/Fahed-Alhammadi/IntesisHome/issues). Include your Home Assistant version, the integration version and debug logs.
 - **Security vulnerabilities**: do not open a public issue. See [SECURITY.md](SECURITY.md) for how to report them privately.
 - **Pull requests**:
   1. Fork the repository and create a branch.
@@ -236,7 +232,7 @@ Bug reports and pull requests are welcome.
 - Based on the work of [@jnimmo](https://github.com/jnimmo) in [hass-intesishome](https://github.com/jnimmo/hass-intesishome) and [pyIntesisHome](https://github.com/jnimmo/pyIntesisHome).
 - Maintained by [@Fahed-Alhammadi](https://github.com/Fahed-Alhammadi).
 
-This project is not affiliated with or endorsed by Intesis, HMS Networks, airconwithme or anywAiR.
+This project is not affiliated with or endorsed by Intesis or HMS Networks.
 
 ---
 

@@ -8,7 +8,6 @@
       "user": {
         "title": "Connect to IntesisHome",
         "data": {
-          "device": "Cloud service",
           "username": "Username",
           "password": "Password"
         }
@@ -17,7 +16,6 @@
         "title": "Reauthenticate IntesisHome",
         "description": "The password for {username} is no longer valid. Enter the new password.",
         "data": {
-          "device": "Cloud service",
           "password": "Password"
         }
       }
@@ -33,12 +31,6 @@
     "sensor": {
       "outdoor_temp": {
         "name": "Outdoor temperature"
-      },
-      "power_consumption_heat": {
-        "name": "Heating power consumption"
-      },
-      "power_consumption_cool": {
-        "name": "Cooling power consumption"
       },
       "rssi": {
         "name": "Wi-Fi signal strength"

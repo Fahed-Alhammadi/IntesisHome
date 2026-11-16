@@ -22,7 +22,7 @@ Report them privately through GitHub's private vulnerability reporting:
 Please include as much of the following as you can:
 
 - A description of the vulnerability and its impact
-- The integration version, Home Assistant version and cloud service (IntesisHome, airconwithme or anywAiR)
+- The integration version and Home Assistant version
 - Steps to reproduce, or a proof of concept
 - Any relevant logs, **with usernames, passwords, tokens, device IDs and IP addresses removed**
 
@@ -45,12 +45,12 @@ This is a community project maintained in spare time, so timelines are best effo
 **Out of scope** (please report these to the right party instead):
 
 - Vulnerabilities in [`pyintesishome`](https://github.com/jnimmo/pyIntesisHome): report them to that project.
-- Vulnerabilities in the IntesisHome, airconwithme or anywAiR cloud services, apps or hardware: report them to the vendor.
+- Vulnerabilities in the IntesisHome cloud service, apps or hardware: report them to the vendor.
 - Vulnerabilities in [Home Assistant](https://www.home-assistant.io/security/) itself.
 - Issues that require an attacker to already have administrator access to your Home Assistant instance.
 
 ## Keeping Your Setup Secure
 
 - Your cloud username and password are stored in Home Assistant's config entry storage. Protect your Home Assistant instance and its backups accordingly.
-- Use a unique password for your IntesisHome / airconwithme / anywAiR account.
+- Use a unique password for your IntesisHome account.
 - Before sharing debug logs publicly, remove credentials, tokens, device IDs and IP addresses.

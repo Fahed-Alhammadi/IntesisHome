@@ -90,8 +90,8 @@ MAP_STATE_ICONS = {
 
 
 # Unknown values already logged. Capabilities are re-read on every update
-# (~120s), so without this one unmapped mode (e.g. an Aquarea "heat+tank")
-# logged the same warning hundreds of times a day.
+# (~120s), so without this one unmapped mode or swing position would log
+# the same warning hundreds of times a day.
 _REPORTED_UNKNOWN: set[tuple[str, str]] = set()
 
 
