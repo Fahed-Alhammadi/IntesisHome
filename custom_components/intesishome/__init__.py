@@ -19,8 +19,10 @@ from homeassistant.helpers.event import async_track_time_interval
 DOMAIN = "intesishome"
 PLATFORMS = [Platform.CLIMATE, Platform.SENSOR, Platform.BINARY_SENSOR, Platform.BUTTON]
 
-# How often to check for a permanently-rejected credential (see health check).
-HEALTH_CHECK_INTERVAL = timedelta(minutes=5)
+# How often the watchdog runs (see _async_watchdog). It makes no network
+# calls, so a short interval costs nothing and lets entities go unavailable
+# soon after the controller's cached state goes stale.
+HEALTH_CHECK_INTERVAL = timedelta(minutes=1)
 
 # Bounds a single connect() attempt. pyintesishome's own HTTP/socket calls
 # have no timeout of their own (aiohttp's ~5 min default applies at best), so
@@ -62,6 +64,43 @@ class _IntesisHome(IntesisHome):
     socket connects (which Intesis is known to blacklist IPs for). Services
     without a portal keep pyintesishome's socket path.
     """
+
+    async def _poll_status(self, sendcallback=False):
+        """Poll the cloud, reporting any unexpected failure as IHConnectionError.
+
+        pyintesishome only turns aiohttp's ClientError into IHConnectionError.
+        Other failures get through: a plain TimeoutError when aiohttp's total
+        request timeout expires, a ValueError when an outage serves an HTML
+        error page instead of JSON, a KeyError or AttributeError on a reply
+        with an unexpected shape. Its background poller only survives
+        IHConnectionError and IHAuthenticationError, so any of these stopped
+        polling for good and every entity went stale until Home Assistant
+        restarted. At setup they also bypassed ConfigEntryNotReady, so Home
+        Assistant marked the entry failed and never retried it.
+        """
+        try:
+            return await super()._poll_status(sendcallback)
+        except (IHAuthenticationError, IHConnectionError):
+            raise
+        except (TimeoutError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            raise IHConnectionError(
+                f"Unexpected reply from {self._device_type} API: {exc!r}"
+            ) from exc
+
+    async def stop(self):
+        """Stop the controller, even if its poll task has already crashed.
+
+        pyintesishome's stop() awaits the poll task and only expects it to
+        be cancelled. If the task had died with an exception, stop() raised
+        that exception, so unloading or reloading the entry failed too and
+        only a Home Assistant restart recovered it.
+        """
+        task = self._poll_task
+        if task is not None and task.done():
+            if not task.cancelled():
+                task.exception()  # mark retrieved; the watchdog logs it
+            self._poll_task = None
+        await super().stop()
 
     async def _set_value(self, device_id, uid, value) -> bool:
         """Send a SET, then record the accepted value in the state cache.
@@ -159,24 +198,52 @@ async def async_setup_entry(hass: HomeAssistant, entry: IntesisConfigEntry) -> b
 
     entry.runtime_data = controller
 
-    async def _async_health_check(_now) -> None:
-        """Start reauth once the cloud stops accepting these credentials.
+    last_available = controller.is_available
+    reauth_started = False
 
-        pyintesishome's background poller (added in 2.5.0, replacing the
-        old push-socket auto-reconnect loop) retries connection errors
-        forever on its own, but permanently retires itself once the cloud
-        rejects the credentials. That is the one failure a retry can't
-        fix, so this is what should trigger the reauth flow instead of
-        leaving entities unavailable indefinitely.
+    async def _async_watchdog(_now) -> None:
+        """Keep entities in step with the controller's health.
+
+        - Availability: pyintesishome only calls the update callbacks after a
+          successful poll, never when one fails, and is_available goes False
+          purely because time passes. Without a nudge, entities (including
+          the Connectivity sensor) kept showing the last state as available
+          for the whole outage. Write state whenever is_available changes.
+        - Poller: if the background poll task has died (any exception other
+          than the two it handles), start it again rather than leaving the
+          entry frozen until Home Assistant restarts.
+        - Credentials: the poller retires itself once the cloud rejects the
+          credentials. A retry can't fix that, so start the reauth flow
+          (once, not on every run).
         """
+        nonlocal last_available, reauth_started
+
         if controller.authentication_failed:
-            _LOGGER.error(
-                "IntesisHome credentials are no longer valid; starting reauth"
-            )
-            entry.async_start_reauth(hass)
+            if not reauth_started:
+                reauth_started = True
+                _LOGGER.error(
+                    "IntesisHome credentials are no longer valid; starting reauth"
+                )
+                entry.async_start_reauth(hass)
+        else:
+            reauth_started = False
+            task = controller._poll_task  # noqa: SLF001
+            if task is not None and task.done():
+                exc = None if task.cancelled() else task.exception()
+                _LOGGER.warning(
+                    "%s poller stopped unexpectedly (%r); restarting it",
+                    device_type,
+                    exc,
+                )
+                controller._start_poller()  # noqa: SLF001
+
+        available = controller.is_available
+        if available != last_available:
+            last_available = available
+            await controller._send_update_callback()  # noqa: SLF001
 
     entry.async_on_unload(
-        async_track_time_interval(hass, _async_health_check, HEALTH_CHECK_INTERVAL)
+        async_track_time_interval(hass, _async_watchdog, HEALTH_CHECK_INTERVAL)
     )
 
     try:

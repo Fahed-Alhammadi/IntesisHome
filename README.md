@@ -5,7 +5,7 @@
 **Control IntesisHome, airconwithme and anywAiR air conditioners from Home Assistant.**
 
 [![HACS](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![Version](https://img.shields.io/badge/version-2.0.3-blue.svg?style=for-the-badge)](https://github.com/Fahed-Alhammadi/IntesisHome/releases)
+[![Version](https://img.shields.io/badge/version-2.0.4-blue.svg?style=for-the-badge)](https://github.com/Fahed-Alhammadi/IntesisHome/releases)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.12%2B-41BDF5.svg?style=for-the-badge&logo=homeassistant&logoColor=white)](https://www.home-assistant.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
 

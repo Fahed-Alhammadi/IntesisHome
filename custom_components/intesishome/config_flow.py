@@ -17,7 +17,7 @@ from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.const import CONF_DEVICE, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from . import DOMAIN
+from . import DOMAIN, _IntesisHome
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,7 +41,10 @@ class IntesisConfigFlow(ConfigFlow, domain=DOMAIN):
         Returns the controller (which the caller MUST stop) and an error key,
         or ``None`` when validation succeeds.
         """
-        controller = IntesisHome(
+        # _IntesisHome reports an HTML error page or a timeout as
+        # IHConnectionError, so the form shows "cannot connect" for a cloud
+        # outage instead of "unexpected error".
+        controller = _IntesisHome(
             username,
             password,
             self.hass.loop,

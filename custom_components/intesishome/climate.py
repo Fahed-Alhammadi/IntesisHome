@@ -89,6 +89,19 @@ MAP_STATE_ICONS = {
 }
 
 
+# Unknown values already logged. Capabilities are re-read on every update
+# (~120s), so without this one unmapped mode (e.g. an Aquarea "heat+tank")
+# logged the same warning hundreds of times a day.
+_REPORTED_UNKNOWN: set[tuple[str, str]] = set()
+
+
+def _warn_unknown_once(kind: str, value: str) -> None:
+    """Log an unmapped device value the first time it is seen."""
+    if (kind, value) not in _REPORTED_UNKNOWN:
+        _REPORTED_UNKNOWN.add((kind, value))
+        _LOGGER.warning("Unexpected %s reported by device: %s", kind, value)
+
+
 def _swing_names_from_controller_list(ih_positions: list[str] | None) -> list[str]:
     """Translate IH swing positions to HA-facing names, skipping unknowns."""
     if not ih_positions:
@@ -97,7 +110,7 @@ def _swing_names_from_controller_list(ih_positions: list[str] | None) -> list[st
     for ih in ih_positions:
         ha = MAP_IH_TO_SWING.get(ih)
         if ha is None:
-            _LOGGER.warning("Unexpected swing position reported by device: %s", ih)
+            _warn_unknown_once("swing position", ih)
             continue
         names.append(ha)
     return names
@@ -212,7 +225,7 @@ class IntesisAC(ClimateEntity):
                 if mode in MAP_IH_TO_HVAC_MODE:
                     hvac_modes.append(MAP_IH_TO_HVAC_MODE[mode])
                 else:
-                    _LOGGER.warning("Unexpected HVAC mode from device: %s", mode)
+                    _warn_unknown_once("HVAC mode", mode)
         hvac_modes.append(HVACMode.OFF)
         self._attr_hvac_modes = hvac_modes
 
